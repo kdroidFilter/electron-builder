@@ -145,9 +145,12 @@ export default class MsixTarget extends Target {
     }
 
     this.buildQueueManager.add(async () => {
-      await vm.exec(vm.toVmFile(path.join(vendorPath.kit, "makeappx.exe")), makeAppXArgs)
-      await packager.signIf(artifactPath)
-      await stageDir.cleanup()
+      try {
+        await vm.exec(vm.toVmFile(path.join(vendorPath.kit, "makeappx.exe")), makeAppXArgs)
+        await packager.signIf(artifactPath)
+      } finally {
+        await stageDir.cleanup()
+      }
       await packager.info.emitArtifactBuildCompleted({
         file: artifactPath,
         packager,
