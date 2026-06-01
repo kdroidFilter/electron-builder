@@ -32,6 +32,28 @@ exports[`msix > msix with createMsixupload produces a valid zip archive 1`] = `
 }
 `;
 
+exports[`msix > msix with enforcePackageIntegrity installs and manifest contains integrity element 1`] = `
+{
+  "win": [
+    {
+      "arch": "x64",
+      "file": "TestApp-1.0.0-x64.msix",
+    },
+  ],
+}
+`;
+
+exports[`msix > msix with windowsServices manifest contains desktop6 extension 1`] = `
+{
+  "win": [
+    {
+      "arch": "x64",
+      "file": "TestApp-1.0.0-x64.msix",
+    },
+  ],
+}
+`;
+
 exports[`msix > multi-arch msixbundle installs via VM 1`] = `
 {
   "win": [
