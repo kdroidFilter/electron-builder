@@ -1,11 +1,16 @@
 import {
   buildCapabilitiesXml,
   buildExtensionsXml,
+  buildSharedPackageContainerXml,
+  buildStartMenuGroupXml,
+  buildWindowsServicesXml,
   defaultTileTag,
   escapeXmlAttr,
   isDefaultAssetIncluded,
   isScaledAssetsProvided,
   lockScreenTag,
+  resolvePackageApplicationId,
+  resolvePackageIdentityName,
   resourceLanguageTag,
   splashScreenTag,
   validateApplicationId,
@@ -302,4 +307,146 @@ test("buildExtensionsXml: handles multiple schemes per protocol", async ({ expec
   })
   expect(result).toContain('Name="myapp"')
   expect(result).toContain('Name="myapp2"')
+})
+
+test("buildExtensionsXml: handles multiple file associations each with multiple extensions", async ({ expect }) => {
+  const result = await buildExtensionsXml({
+    protocols: [],
+    fileAssociations: [{ ext: ["txt", "log"] }, { ext: "md" }],
+    appDir: "/some/dir",
+    executable: "app\\MyApp.exe",
+    displayName: "My App",
+  })
+  expect(result).toContain('Name="txt"')
+  expect(result).toContain('Name="log"')
+  expect(result).toContain('Name="md"')
+})
+
+// ─── resolvePackageApplicationId ─────────────────────────────────────────────
+
+test("resolvePackageApplicationId: uses explicit applicationId when provided", ({ expect }) => {
+  expect(resolvePackageApplicationId("MyExplicit", "SomeName", "appname", "Test")).toBe("MyExplicit")
+})
+
+test("resolvePackageApplicationId: falls back to identityName when no applicationId", ({ expect }) => {
+  expect(resolvePackageApplicationId(undefined, "MyIdentity", "appname", "Test")).toBe("MyIdentity")
+})
+
+test("resolvePackageApplicationId: falls back to appName when both are absent", ({ expect }) => {
+  expect(resolvePackageApplicationId(undefined, undefined, "myApp", "Test")).toBe("myApp")
+})
+
+test("resolvePackageApplicationId: strips leading numeric prefix from identityName", ({ expect }) => {
+  // This is the numeric-prefix stripping behaviour preserved from the original AppX code
+  const result = resolvePackageApplicationId(undefined, "12345Test.App", "appname", "Test")
+  expect(result).toBe("Test.App")
+})
+
+test("resolvePackageApplicationId: strips leading zero-prefixed numeric from identityName", ({ expect }) => {
+  const result = resolvePackageApplicationId(undefined, "01234Test.App", "appname", "Test")
+  expect(result).toBe("Test.App")
+})
+
+test("resolvePackageApplicationId: throws for invalid resulting id", ({ expect }) => {
+  expect(() => resolvePackageApplicationId("CON", undefined, "appname", "Test")).toThrow("restricted values")
+})
+
+// ─── resolvePackageIdentityName ───────────────────────────────────────────────
+
+test("resolvePackageIdentityName: uses identityName when provided", ({ expect }) => {
+  expect(resolvePackageIdentityName("MyId", "fallback", "Test")).toBe("MyId")
+})
+
+test("resolvePackageIdentityName: falls back to appName when identityName is null", ({ expect }) => {
+  expect(resolvePackageIdentityName(null, "fallback", "Test")).toBe("fallback")
+})
+
+test("resolvePackageIdentityName: falls back to appName when identityName is undefined", ({ expect }) => {
+  expect(resolvePackageIdentityName(undefined, "fallback", "Test")).toBe("fallback")
+})
+
+test("resolvePackageIdentityName: throws for invalid identity name", ({ expect }) => {
+  expect(() => resolvePackageIdentityName("AB", "fallback", "Test")).toThrow("between 3 and 50")
+})
+
+// ─── buildWindowsServicesXml ──────────────────────────────────────────────────
+
+test("buildWindowsServicesXml: returns empty string for undefined services", ({ expect }) => {
+  expect(buildWindowsServicesXml(undefined, "app\\App.exe")).toBe("")
+})
+
+test("buildWindowsServicesXml: returns empty string for empty array", ({ expect }) => {
+  expect(buildWindowsServicesXml([], "app\\App.exe")).toBe("")
+})
+
+test("buildWindowsServicesXml: generates service extension with default start type", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: "MySvc" }], "app\\App.exe")
+  expect(result).toContain('Category="windows.service"')
+  expect(result).toContain('Name="MySvc"')
+  expect(result).toContain('StartType="auto"')
+  expect(result).toContain('Executable="app\\App.exe"')
+})
+
+test("buildWindowsServicesXml: uses custom executable when provided", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: "MySvc", executable: "app\\svc.exe" }], "app\\App.exe")
+  expect(result).toContain('Executable="app\\svc.exe"')
+})
+
+test("buildWindowsServicesXml: includes Arguments attribute when present", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: "MySvc", arguments: "--flag" }], "app\\App.exe")
+  expect(result).toContain('Arguments="--flag"')
+})
+
+test("buildWindowsServicesXml: escapes special characters in service name", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: 'Svc "A" & B' }], "app\\App.exe")
+  expect(result).toContain('Name="Svc &quot;A&quot; &amp; B"')
+  expect(result).not.toContain('"Svc "A"')
+})
+
+test("buildWindowsServicesXml: generates multiple service extensions", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: "Svc1" }, { name: "Svc2", startType: "manual" }], "app\\App.exe")
+  expect(result).toContain('Name="Svc1"')
+  expect(result).toContain('Name="Svc2"')
+  expect(result).toContain('StartType="manual"')
+})
+
+// ─── buildSharedPackageContainerXml ──────────────────────────────────────────
+
+test("buildSharedPackageContainerXml: returns empty string for undefined", ({ expect }) => {
+  expect(buildSharedPackageContainerXml(undefined)).toBe("")
+})
+
+test("buildSharedPackageContainerXml: generates container element", ({ expect }) => {
+  const result = buildSharedPackageContainerXml({ name: "MyContainer" })
+  expect(result).toContain('Name="MyContainer"')
+  expect(result).toContain("desktop9:SharedPackageContainer")
+})
+
+test("buildSharedPackageContainerXml: includes member packages", ({ expect }) => {
+  const result = buildSharedPackageContainerXml({ name: "MyContainer", memberPackages: ["com.example.App1_abc", "com.example.App2_xyz"] })
+  expect(result).toContain('FamilyName="com.example.App1_abc"')
+  expect(result).toContain('FamilyName="com.example.App2_xyz"')
+})
+
+test("buildSharedPackageContainerXml: escapes special chars in container name", ({ expect }) => {
+  const result = buildSharedPackageContainerXml({ name: 'My"Container' })
+  expect(result).toContain('Name="My&quot;Container"')
+})
+
+// ─── buildStartMenuGroupXml ───────────────────────────────────────────────────
+
+test("buildStartMenuGroupXml: returns empty string when not configured", ({ expect }) => {
+  expect(buildStartMenuGroupXml(undefined, "My App")).toBe("")
+})
+
+test("buildStartMenuGroupXml: generates desktop7 extension element", ({ expect }) => {
+  const result = buildStartMenuGroupXml("My Suite", "My App")
+  expect(result).toContain('Category="windows.appMigration"')
+  expect(result).toContain("desktop7:AppMigration")
+  expect(result).toContain('AumId="My App"')
+})
+
+test("buildStartMenuGroupXml: escapes special chars in displayName", ({ expect }) => {
+  const result = buildStartMenuGroupXml("suite", 'My "App" & Co')
+  expect(result).toContain('AumId="My &quot;App&quot; &amp; Co"')
 })

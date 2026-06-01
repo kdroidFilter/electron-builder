@@ -1,4 +1,4 @@
-import { Arch, asArray, copyOrLinkFile, exec, getPath7za, log, walk } from "builder-util"
+import { Arch, asArray, copyOrLinkFile, exec, getPath7za, InvalidConfigurationError, log, walk } from "builder-util"
 import { deepAssign } from "builder-util-runtime"
 import { emptyDir, mkdirs, readdir, readFile, remove, writeFile } from "fs-extra"
 import * as path from "path"
@@ -6,7 +6,7 @@ import { MsixOptions } from "../options/MsixOptions"
 import { getWindowsKitsBundle } from "../toolsets/windows"
 import { Target } from "../core"
 import { getTemplatePath } from "../util/pathManager"
-import { VmManager } from "../vm/vm"
+import type { VmManager } from "../vm/vm"
 import { WinPackager } from "../winPackager"
 import { createStageDir } from "./targetUtil"
 import { isOldWin6 } from "../toolsets/windows"
@@ -14,17 +14,18 @@ import {
   APPX_ASSETS_DIR_NAME,
   buildCapabilitiesXml,
   buildExtensionsXml,
+  buildSharedPackageContainerXml,
+  buildStartMenuGroupXml,
+  buildWindowsServicesXml,
   computeUserAssets,
   defaultTileTag,
-  escapeXmlAttr,
   isScaledAssetsProvided,
   lockScreenTag,
+  resolvePackageApplicationId,
+  resolvePackageIdentityName,
   resourceLanguageTag,
   splashScreenTag,
-  validateApplicationId,
-  validateIdentityName,
 } from "./appxUtil"
-import { MsixWindowsService } from "../options/MsixOptions"
 
 export default class MsixTarget extends Target {
   readonly options: MsixOptions = deepAssign({}, this.packager.platformSpecificBuildOptions, this.packager.config.msix)
@@ -241,7 +242,7 @@ export default class MsixTarget extends Target {
     const displayName = options.displayName || appInfo.productName
     const capabilities = this.getCapabilities()
     const extensions = await this.getExtensions(executable, displayName)
-    const defaultMinVersion = arch === Arch.arm64 ? "10.0.17763.0" : "10.0.17763.0"
+    const defaultMinVersion = "10.0.17763.0"
 
     const customManifestPath = await this.packager.getResource(options.customManifestPath)
     if (customManifestPath) {
@@ -256,7 +257,7 @@ export default class MsixTarget extends Target {
         case "publisherDisplayName": {
           const name = options.publisherDisplayName || appInfo.companyName
           if (name == null) {
-            throw new Error(`Please specify "author" in the application package.json — it is required because "msix.publisherDisplayName" is not set.`)
+            throw new InvalidConfigurationError(`Please specify "author" in the application package.json — it is required because "msix.publisherDisplayName" is not set.`)
           }
           return name
         }
@@ -265,10 +266,10 @@ export default class MsixTarget extends Target {
           return appInfo.getVersionInWeirdWindowsForm(options.setBuildNumber === true)
 
         case "applicationId":
-          return resolveMsixApplicationId(options.applicationId, options.identityName, appInfo.name)
+          return resolvePackageApplicationId(options.applicationId, options.identityName, appInfo.name, "MSIX")
 
         case "identityName":
-          return resolveMsixIdentityName(options.identityName, appInfo.name)
+          return resolvePackageIdentityName(options.identityName, appInfo.name, "MSIX")
 
         case "executable":
           return executable
@@ -360,73 +361,6 @@ export default class MsixTarget extends Target {
       return `<Extensions>${servicesXml}${startMenuXml}</Extensions>`
     }
 
-    // Insert MSIX-specific extensions before the closing tag
-    return baseExtensions.replace(/<\/Extensions>$/, `${servicesXml}${startMenuXml}</Extensions>`)
+    return baseExtensions.replace("</Extensions>", `${servicesXml}${startMenuXml}</Extensions>`)
   }
 }
-
-function resolveMsixApplicationId(applicationId: string | undefined, identityName: string | null | undefined, appName: string): string {
-  let result: string
-  const identitynumber = parseInt(identityName as string, 10) || NaN
-
-  if (applicationId) {
-    result = applicationId
-  } else if (!isNaN(identitynumber) && identityName !== null && identityName !== undefined) {
-    if (identityName[0] === "0") {
-      log.warn(`Remove the 0${identitynumber}`)
-      result = identityName.replace("0" + identitynumber.toString(), "")
-    } else {
-      log.warn(`Remove the ${identitynumber}`)
-      result = identityName.replace(identitynumber.toString(), "")
-    }
-  } else {
-    result = identityName || appName
-  }
-
-  validateApplicationId(result, "MSIX")
-  return result
-}
-
-function resolveMsixIdentityName(identityName: string | null | undefined, appName: string): string {
-  const result = identityName || appName
-  validateIdentityName(result, "MSIX")
-  return result
-}
-
-function buildWindowsServicesXml(services: ReadonlyArray<MsixWindowsService> | undefined, defaultExecutable: string): string {
-  if (!services || services.length === 0) {
-    return ""
-  }
-  return services
-    .map(svc => {
-      const exe = escapeXmlAttr(svc.executable || defaultExecutable)
-      const startType = escapeXmlAttr(svc.startType ?? "auto")
-      const argsAttr = svc.arguments ? ` Arguments="${escapeXmlAttr(svc.arguments)}"` : ""
-      return `
-        <desktop6:Extension Category="windows.service" Executable="${exe}" EntryPoint="Windows.FullTrustApplication">
-          <desktop6:Service Name="${escapeXmlAttr(svc.name)}" StartType="${startType}"${argsAttr} />
-        </desktop6:Extension>`
-    })
-    .join("")
-}
-
-function buildSharedPackageContainerXml(container: MsixOptions["sharedPackageContainer"]): string {
-  if (!container) {
-    return ""
-  }
-  const members = (container.memberPackages ?? []).map(pkg => `    <desktop9:Package FamilyName="${escapeXmlAttr(pkg)}" />`).join("\n")
-  return `<desktop9:SharedPackageContainer Name="${escapeXmlAttr(container.name)}">\n${members}\n  </desktop9:SharedPackageContainer>`
-}
-
-function buildStartMenuGroupXml(startMenuGroup: string | undefined, displayName: string): string {
-  if (!startMenuGroup) {
-    return ""
-  }
-  return `
-        <desktop7:Extension Category="windows.appMigration">
-          <desktop7:AppMigration AumId="${escapeXmlAttr(displayName)}" DeepLink="" />
-        </desktop7:Extension>`
-}
-
-// Re-export interface so consumers can reference MsixOptions without a separate import
-export type { MsixOptions }

@@ -1,4 +1,5 @@
-import { asArray, InvalidConfigurationError } from "builder-util"
+import { asArray, InvalidConfigurationError, log } from "builder-util"
+import type { MsixWindowsService, MsixSharedPackageContainer } from "../options/MsixOptions"
 import { Nullish } from "builder-util-runtime"
 import { readdir, readFile } from "fs-extra"
 import * as path from "path"
@@ -152,6 +153,38 @@ export function isScaledAssetsProvided(userAssets: Array<string>): boolean {
   return userAssets.some(it => it.includes(".scale-") || it.includes(".targetsize-"))
 }
 
+/**
+ * Resolves the final applicationId value from config, stripping any leading numeric prefix
+ * from identityName (a common user mistake), then validates it.
+ */
+export function resolvePackageApplicationId(applicationId: string | undefined, identityName: string | null | undefined, appName: string, contextLabel: string): string {
+  let result: string
+  const identitynumber = parseInt(identityName as string, 10) || NaN
+
+  if (applicationId) {
+    result = applicationId
+  } else if (!isNaN(identitynumber) && identityName !== null && identityName !== undefined) {
+    if (identityName[0] === "0") {
+      log.warn(`Remove the 0${identitynumber}`)
+      result = identityName.replace("0" + identitynumber.toString(), "")
+    } else {
+      log.warn(`Remove the ${identitynumber}`)
+      result = identityName.replace(identitynumber.toString(), "")
+    }
+  } else {
+    result = identityName || appName
+  }
+
+  validateApplicationId(result, contextLabel)
+  return result
+}
+
+export function resolvePackageIdentityName(identityName: string | null | undefined, appName: string, contextLabel: string): string {
+  const result = identityName || appName
+  validateIdentityName(result, contextLabel)
+  return result
+}
+
 export function buildCapabilitiesXml(capabilityNames: Array<string> | null | undefined): string {
   const caps = asArray(capabilityNames)
   const capSet = new Set(caps)
@@ -230,4 +263,39 @@ export async function buildExtensionsXml(input: ExtensionsInput): Promise<string
 
   extensions += "</Extensions>"
   return extensions
+}
+
+export function buildWindowsServicesXml(services: ReadonlyArray<MsixWindowsService> | undefined, defaultExecutable: string): string {
+  if (!services || services.length === 0) {
+    return ""
+  }
+  return services
+    .map(svc => {
+      const exe = escapeXmlAttr(svc.executable || defaultExecutable)
+      const startType = escapeXmlAttr(svc.startType ?? "auto")
+      const argsAttr = svc.arguments ? ` Arguments="${escapeXmlAttr(svc.arguments)}"` : ""
+      return `
+        <desktop6:Extension Category="windows.service" Executable="${exe}" EntryPoint="Windows.FullTrustApplication">
+          <desktop6:Service Name="${escapeXmlAttr(svc.name)}" StartType="${startType}"${argsAttr} />
+        </desktop6:Extension>`
+    })
+    .join("")
+}
+
+export function buildSharedPackageContainerXml(container: MsixSharedPackageContainer | null | undefined): string {
+  if (!container) {
+    return ""
+  }
+  const members = (container.memberPackages ?? []).map(pkg => `    <desktop9:Package FamilyName="${escapeXmlAttr(pkg)}" />`).join("\n")
+  return `<desktop9:SharedPackageContainer Name="${escapeXmlAttr(container.name)}">\n${members}\n  </desktop9:SharedPackageContainer>`
+}
+
+export function buildStartMenuGroupXml(startMenuGroup: string | undefined, displayName: string): string {
+  if (!startMenuGroup) {
+    return ""
+  }
+  return `
+        <desktop7:Extension Category="windows.appMigration">
+          <desktop7:AppMigration AumId="${escapeXmlAttr(displayName)}" DeepLink="" />
+        </desktop7:Extension>`
 }

@@ -1,4 +1,4 @@
-import { Arch, asArray, copyOrLinkFile, log, walk } from "builder-util"
+import { Arch, asArray, copyOrLinkFile, InvalidConfigurationError, log, walk } from "builder-util"
 import { deepAssign } from "builder-util-runtime"
 import { emptyDir, readdir, readFile, writeFile } from "fs-extra"
 import * as path from "path"
@@ -17,10 +17,10 @@ import {
   defaultTileTag,
   isScaledAssetsProvided,
   lockScreenTag,
+  resolvePackageApplicationId,
+  resolvePackageIdentityName,
   resourceLanguageTag,
   splashScreenTag,
-  validateApplicationId,
-  validateIdentityName,
 } from "./appxUtil"
 
 export default class AppXTarget extends Target {
@@ -168,7 +168,7 @@ export default class AppXTarget extends Target {
         case "publisherDisplayName": {
           const name = options.publisherDisplayName || appInfo.companyName
           if (name == null) {
-            throw new Error(`Please specify "author" in the application package.json — it is required because "appx.publisherDisplayName" is not set.`)
+            throw new InvalidConfigurationError(`Please specify "author" in the application package.json — it is required because "appx.publisherDisplayName" is not set.`)
           }
           return name
         }
@@ -177,10 +177,10 @@ export default class AppXTarget extends Target {
           return appInfo.getVersionInWeirdWindowsForm(options.setBuildNumber === true)
 
         case "applicationId":
-          return resolveApplicationId(options.applicationId, options.identityName, appInfo.name)
+          return resolvePackageApplicationId(options.applicationId, options.identityName, appInfo.name, "Appx")
 
         case "identityName":
-          return resolveIdentityName(options.identityName, appInfo.name)
+          return resolvePackageIdentityName(options.identityName, appInfo.name, "AppX")
 
         case "executable":
           return executable
@@ -255,32 +255,4 @@ export default class AppXTarget extends Target {
       dependencyNames: packager.info.metadata.dependencies,
     })
   }
-}
-
-function resolveApplicationId(applicationId: string | undefined, identityName: string | null | undefined, appName: string): string {
-  let result: string
-  const identitynumber = parseInt(identityName as string, 10) || NaN
-
-  if (applicationId) {
-    result = applicationId
-  } else if (!isNaN(identitynumber) && identityName !== null && identityName !== undefined) {
-    if (identityName[0] === "0") {
-      log.warn(`Remove the 0${identitynumber}`)
-      result = identityName.replace("0" + identitynumber.toString(), "")
-    } else {
-      log.warn(`Remove the ${identitynumber}`)
-      result = identityName.replace(identitynumber.toString(), "")
-    }
-  } else {
-    result = identityName || appName
-  }
-
-  validateApplicationId(result, "Appx")
-  return result
-}
-
-function resolveIdentityName(identityName: string | null | undefined, appName: string): string {
-  const result = identityName || appName
-  validateIdentityName(result, "AppX")
-  return result
 }

@@ -108,7 +108,7 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
         appxManifestCreated: async filepath => {
           const fileContent = await readFile(filepath, "utf-8")
           expect(fileContent).toContain('<uap10:PackageIntegrity Level="turnOn" />')
-          expect(fileContent).toContain('xmlns:uap10=')
+          expect(fileContent).toContain("xmlns:uap10=")
         },
       },
     }))
@@ -130,7 +130,7 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
           const fileContent = await readFile(filepath, "utf-8")
           expect(fileContent).toContain("desktop6:Extension")
           expect(fileContent).toContain("MyBackgroundService")
-          expect(fileContent).toContain('xmlns:desktop6=')
+          expect(fileContent).toContain("xmlns:desktop6=")
         },
       },
     }))
@@ -146,7 +146,7 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
         appxManifestCreated: async filepath => {
           const fileContent = await readFile(filepath, "utf-8")
           expect(fileContent).toContain("desktop7:Extension")
-          expect(fileContent).toContain('xmlns:desktop7=')
+          expect(fileContent).toContain("xmlns:desktop7=")
         },
       },
     }))
@@ -166,7 +166,7 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
           const fileContent = await readFile(filepath, "utf-8")
           expect(fileContent).toContain("desktop9:SharedPackageContainer")
           expect(fileContent).toContain("MySharedContainer")
-          expect(fileContent).toContain('xmlns:desktop9=')
+          expect(fileContent).toContain("xmlns:desktop9=")
         },
       },
     }))
