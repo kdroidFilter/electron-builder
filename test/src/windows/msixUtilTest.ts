@@ -379,22 +379,19 @@ test("buildWindowsServicesXml: returns empty string for empty array", ({ expect 
   expect(buildWindowsServicesXml([], "app\\App.exe")).toBe("")
 })
 
-test("buildWindowsServicesXml: generates service extension with default start type", ({ expect }) => {
+test("buildWindowsServicesXml: generates service extension", ({ expect }) => {
   const result = buildWindowsServicesXml([{ name: "MySvc" }], "app\\App.exe")
   expect(result).toContain('Category="windows.service"')
   expect(result).toContain('Name="MySvc"')
-  expect(result).toContain('StartType="auto"')
   expect(result).toContain('Executable="app\\App.exe"')
+  // desktop6:Service schema does not include StartType or Arguments attributes
+  expect(result).not.toContain("StartType")
+  expect(result).not.toContain("Arguments")
 })
 
 test("buildWindowsServicesXml: uses custom executable when provided", ({ expect }) => {
   const result = buildWindowsServicesXml([{ name: "MySvc", executable: "app\\svc.exe" }], "app\\App.exe")
   expect(result).toContain('Executable="app\\svc.exe"')
-})
-
-test("buildWindowsServicesXml: includes Arguments attribute when present", ({ expect }) => {
-  const result = buildWindowsServicesXml([{ name: "MySvc", arguments: "--flag" }], "app\\App.exe")
-  expect(result).toContain('Arguments="--flag"')
 })
 
 test("buildWindowsServicesXml: escapes special characters in service name", ({ expect }) => {
@@ -404,10 +401,9 @@ test("buildWindowsServicesXml: escapes special characters in service name", ({ e
 })
 
 test("buildWindowsServicesXml: generates multiple service extensions", ({ expect }) => {
-  const result = buildWindowsServicesXml([{ name: "Svc1" }, { name: "Svc2", startType: "manual" }], "app\\App.exe")
+  const result = buildWindowsServicesXml([{ name: "Svc1" }, { name: "Svc2" }], "app\\App.exe")
   expect(result).toContain('Name="Svc1"')
   expect(result).toContain('Name="Svc2"')
-  expect(result).toContain('StartType="manual"')
 })
 
 // ─── buildSharedPackageContainerXml ──────────────────────────────────────────

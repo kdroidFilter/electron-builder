@@ -272,11 +272,10 @@ export function buildWindowsServicesXml(services: ReadonlyArray<MsixWindowsServi
   return services
     .map(svc => {
       const exe = escapeXmlAttr(svc.executable || defaultExecutable)
-      const startType = escapeXmlAttr(svc.startType ?? "auto")
-      const argsAttr = svc.arguments ? ` Arguments="${escapeXmlAttr(svc.arguments)}"` : ""
+      // desktop6:Service only accepts Name — StartType and Arguments are not in the schema
       return `
         <desktop6:Extension Category="windows.service" Executable="${exe}" EntryPoint="Windows.FullTrustApplication">
-          <desktop6:Service Name="${escapeXmlAttr(svc.name)}" StartType="${startType}"${argsAttr} />
+          <desktop6:Service Name="${escapeXmlAttr(svc.name)}" />
         </desktop6:Extension>`
     })
     .join("")

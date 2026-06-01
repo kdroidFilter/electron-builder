@@ -4187,6 +4187,260 @@
       },
       "type": "object"
     },
+    "MsixOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "addAutoLaunchExtension": {
+          "description": "Whether to add auto launch extension. Defaults to `true` if electron-winstore-auto-launch is in the dependencies.",
+          "type": "boolean"
+        },
+        "applicationId": {
+          "description": "The application id. Defaults to `identityName`. This string contains alpha-numeric fields separated by periods.\nEach field must begin with an ASCII alphabetic character.",
+          "type": "string"
+        },
+        "artifactName": {
+          "description": "The [artifact file name template](https://www.electron.build/configuration#artifact-file-name-template).",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "backgroundColor": {
+          "default": "#464646",
+          "description": "The background color of the app tile.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "capabilities": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": [
+            "runFullTrust"
+          ],
+          "description": "The list of capabilities to be added to the AppxManifest.xml.\nThe `runFullTrust` capability is obligatory for Electron apps and will be auto-added if not specified."
+        },
+        "createMsixbundle": {
+          "default": true,
+          "description": "Whether to produce a .msixbundle when more than one architecture is built.",
+          "type": "boolean"
+        },
+        "createMsixupload": {
+          "default": false,
+          "description": "Whether to produce a .msixupload archive suitable for submission to the Microsoft Store Partner Center.",
+          "type": "boolean"
+        },
+        "customExtensionsPath": {
+          "description": "Relative path to custom extensions xml to be included in the AppxManifest.xml.",
+          "type": "string"
+        },
+        "customManifestPath": {
+          "description": "Relative path to a custom AppxManifest.xml template located in the build resources directory.\nSupports the same ${} template macros as the default template, plus MSIX-specific ones:\n${packageIntegrity}, ${windowsServices}, ${sharedPackageContainer}, ${startMenuGroups}",
+          "type": "string"
+        },
+        "displayName": {
+          "description": "A friendly name displayed to users. Corresponds to Properties.DisplayName. Defaults to the application product name.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "electronUpdaterAware": {
+          "type": "boolean"
+        },
+        "enforcePackageIntegrity": {
+          "default": false,
+          "description": "Enforce package integrity (uap10:PackageIntegrity). Requires Windows 10 version 2004 (build 19041) or later.\nWhen enabled, Windows verifies that no files have been tampered with after the package was signed.",
+          "type": "boolean"
+        },
+        "identityName": {
+          "description": "The package identity name. Corresponds to Identity.Name. Defaults to the application name.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "languages": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          ],
+          "default": [
+            "en-US"
+          ],
+          "description": "The list of supported languages listed in the Windows Store. The first entry (index 0) will be the default language."
+        },
+        "makeappxArgs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxVersionTested": {
+          "default": "same as minVersion",
+          "description": "Set the MaxVersionTested field in the AppxManifest.xml.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "minVersion": {
+          "default": "\"10.0.17763.0\" (Windows 10 version 1809 — minimum for Store submissions)",
+          "description": "Set the MinVersion field in the AppxManifest.xml.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "publish": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GithubOptions"
+            },
+            {
+              "$ref": "#/definitions/GitlabOptions"
+            },
+            {
+              "$ref": "#/definitions/S3Options"
+            },
+            {
+              "$ref": "#/definitions/SpacesOptions"
+            },
+            {
+              "$ref": "#/definitions/GenericServerOptions"
+            },
+            {
+              "$ref": "#/definitions/CustomPublishOptions"
+            },
+            {
+              "$ref": "#/definitions/KeygenOptions"
+            },
+            {
+              "$ref": "#/definitions/SnapStoreOptions"
+            },
+            {
+              "$ref": "#/definitions/BitbucketOptions"
+            },
+            {
+              "items": {
+                "$ref": "#/definitions/AllPublishOptions"
+              },
+              "type": "array"
+            },
+            {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          ]
+        },
+        "publisher": {
+          "description": "The Windows Store publisher. Not used if MSIX is built for testing.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "publisherDisplayName": {
+          "description": "A friendly name for the publisher displayed to users. Corresponds to Properties.PublisherDisplayName.\nDefaults to company name from the application metadata.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "setBuildNumber": {
+          "default": false,
+          "description": "Whether to set the build number in the version field.",
+          "type": "boolean"
+        },
+        "sharedPackageContainer": {
+          "$ref": "#/definitions/MsixSharedPackageContainer",
+          "description": "Shared Package Container configuration (desktop9 namespace).\nAllows multiple packages to share a single app container. Requires Windows 11."
+        },
+        "showNameOnTiles": {
+          "default": false,
+          "description": "Whether to overlay the app's name on top of tile images on the Start screen.",
+          "type": "boolean"
+        },
+        "startMenuGroup": {
+          "description": "Start menu group name for the application (desktop7 namespace).\nGroups the app with other apps in the Start menu. Requires Windows 11.",
+          "type": "string"
+        },
+        "windowsServices": {
+          "description": "Windows Services to register with the MSIX package (desktop6 namespace).\nRequires Windows 10 version 2004 or later.",
+          "items": {
+            "$ref": "#/definitions/MsixWindowsService"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "MsixSharedPackageContainer": {
+      "additionalProperties": false,
+      "properties": {
+        "memberPackages": {
+          "description": "Package family names of member packages.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "The name for the shared package container.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "MsixWindowsService": {
+      "additionalProperties": false,
+      "properties": {
+        "executable": {
+          "description": "Relative path to the service executable within the package.\nDefaults to the main app executable.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The service name used in the Windows Service Control Manager.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "NsisOptions": {
       "additionalProperties": false,
       "properties": {
@@ -8752,7 +9006,7 @@
             }
           ],
           "default": "nsis",
-          "description": "The target package type: list of `nsis`, `nsis-web` (Web installer), `portable` ([portable]https://www.electron.build/nsis#portable) app without installation), `appx`, `msi`, `msi-wrapped`, `squirrel`, `7z`, `zip`, `tar.xz`, `tar.lz`, `tar.gz`, `tar.bz2`, `dir`.\nAppX package can be built only on Windows 10.\n\nTo use Squirrel.Windows please install `electron-builder-squirrel-windows` dependency."
+          "description": "The target package type: list of `nsis`, `nsis-web` (Web installer), `portable` ([portable]https://www.electron.build/nsis#portable) app without installation), `appx`, `msix`, `msi`, `msi-wrapped`, `squirrel`, `7z`, `zip`, `tar.xz`, `tar.lz`, `tar.gz`, `tar.bz2`, `dir`.\nAppX and MSIX packages can be built only on Windows 10.\n\nTo use Squirrel.Windows please install `electron-builder-squirrel-windows` dependency."
         },
         "verifyUpdateCodeSignature": {
           "default": true,
@@ -9542,6 +9796,17 @@
         }
       ],
       "description": "MSI-wrapped installer options."
+    },
+    "msix": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MsixOptions"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "MSIX package options. MSIX is the modern successor to AppX with additional deployment features."
     },
     "nativeRebuilder": {
       "anyOf": [

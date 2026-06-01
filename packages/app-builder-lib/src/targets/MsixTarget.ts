@@ -49,6 +49,14 @@ export default class MsixTarget extends Target {
 
   async build(appOutDir: string, arch: Arch): Promise<any> {
     const packager = this.packager
+    const toolsetVersion = packager.config.toolsets?.winCodeSign
+    if (toolsetVersion == null || toolsetVersion === "0.0.0") {
+      throw new InvalidConfigurationError(
+        'MSIX packaging requires a modern Windows Kits toolset. Please set "toolsets.winCodeSign" to "1.0.0" or "1.1.0" in your build configuration. ' +
+          "The legacy winCodeSign-2.6.0 bundle does not include the Windows SDK version required for MSIX support."
+      )
+    }
+
     const artifactName = packager.expandArtifactBeautyNamePattern(this.options, "msix", arch)
     const artifactPath = path.join(this.outDir, artifactName)
     await packager.info.emitArtifactBuildStarted({
@@ -57,7 +65,7 @@ export default class MsixTarget extends Target {
       arch,
     })
 
-    const vendorPath = await getWindowsKitsBundle({ winCodeSign: packager.config.toolsets?.winCodeSign, arch })
+    const vendorPath = await getWindowsKitsBundle({ winCodeSign: toolsetVersion, arch })
     const vm = await packager.vm.value
 
     // Cache for use in finishBuild
@@ -322,6 +330,10 @@ export default class MsixTarget extends Target {
         case "sharedPackageContainer":
           return buildSharedPackageContainerXml(options.sharedPackageContainer)
 
+        case "packageIntegrity":
+          // uap10:PackageIntegrity belongs inside <Properties>, not <Capabilities>
+          return options.enforcePackageIntegrity === true ? '<uap10:PackageIntegrity Level="turnOn" />' : ""
+
         default:
           throw new Error(`Macro ${p1} is not defined`)
       }
@@ -331,8 +343,7 @@ export default class MsixTarget extends Target {
 
   private getCapabilities(): string {
     const inner = buildCapabilitiesXml(this.options.capabilities)
-    const integrity = this.options.enforcePackageIntegrity === true ? '\n  <uap10:PackageIntegrity Level="turnOn" />' : ""
-    return `<Capabilities>\n${inner}${integrity}\n</Capabilities>`
+    return `<Capabilities>\n${inner}\n</Capabilities>`
   }
 
   private async getExtensions(executable: string, displayName: string): Promise<string> {

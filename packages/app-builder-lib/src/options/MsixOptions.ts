@@ -3,12 +3,11 @@ import { TargetSpecificOptions } from "../core"
 export interface MsixWindowsService {
   /** The service name used in the Windows Service Control Manager. */
   readonly name: string
-  /** Relative path to the service executable within the package. Defaults to the main app executable. */
+  /**
+   * Relative path to the service executable within the package.
+   * Defaults to the main app executable.
+   */
   readonly executable?: string
-  /** How the service starts. @default "auto" */
-  readonly startType?: "auto" | "manual" | "disabled"
-  /** Command-line arguments passed to the service executable. */
-  readonly arguments?: string
 }
 
 export interface MsixSharedPackageContainer {

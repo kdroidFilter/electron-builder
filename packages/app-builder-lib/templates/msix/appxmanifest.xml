@@ -19,6 +19,7 @@
     <PublisherDisplayName>${publisherDisplayName}</PublisherDisplayName>
     <Description>${description}</Description>
     <Logo>${logo}</Logo>
+    ${packageIntegrity}
   </Properties>
   <Resources>
     ${resourceLanguages}

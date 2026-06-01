@@ -122,7 +122,6 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
           windowsServices: [
             {
               name: "MyBackgroundService",
-              startType: "auto",
             },
           ],
         },

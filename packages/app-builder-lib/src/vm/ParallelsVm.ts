@@ -110,6 +110,13 @@ export function macPathToParallelsWindows(file: string) {
   if (file.startsWith("C:\\")) {
     return file
   }
+  // \\Mac\Home maps to the current user's home directory and is always accessible
+  // in both --current-user and SYSTEM exec contexts (unlike \\Mac\Host which requires
+  // "All Disks" sharing to be enabled in Parallels preferences).
+  const home = require("os").homedir() as string
+  if (file.startsWith(home + "/")) {
+    return "\\\\Mac\\Home\\" + file.substring(home.length + 1).replace(/\//g, "\\")
+  }
   return "\\\\Mac\\Host\\" + file.replace(/\//g, "\\")
 }
 
