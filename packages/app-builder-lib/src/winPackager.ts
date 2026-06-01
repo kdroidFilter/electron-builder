@@ -103,6 +103,9 @@ export class WinPackager extends PlatformPackager<WindowsConfiguration> {
             case "msiwrapped":
               return require("./targets/MsiWrappedTarget").default
 
+            case "msix":
+              return require("./targets/MsixTarget").default
+
             default:
               return null
           }

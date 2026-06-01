@@ -53,6 +53,7 @@ export { DmgContent, DmgOptions, DmgWindow, MacConfiguration, MacOsTargetName, M
 export { AuthorMetadata, Metadata, RepositoryInfo } from "./options/metadata"
 export { MsiOptions } from "./options/MsiOptions"
 export { MsiWrappedOptions } from "./options/MsiWrappedOptions"
+export { MsixOptions, MsixWindowsService, MsixSharedPackageContainer } from "./options/MsixOptions"
 export { BackgroundAlignment, BackgroundScaling, PkgBackgroundOptions, PkgOptions } from "./options/pkgOptions"
 export { AsarOptions, FileSet, FilesBuildOptions, PlatformSpecificBuildOptions, Protocol, ReleaseInfo } from "./options/PlatformSpecificBuildOptions"
 export { PlugDescriptor, SlotDescriptor, SnapcraftOptions, SnapOptions } from "./options/SnapOptions"

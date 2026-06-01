@@ -1,0 +1,432 @@
+import { Arch, asArray, copyOrLinkFile, exec, getPath7za, log, walk } from "builder-util"
+import { deepAssign } from "builder-util-runtime"
+import { emptyDir, mkdirs, readdir, readFile, remove, writeFile } from "fs-extra"
+import * as path from "path"
+import { MsixOptions } from "../options/MsixOptions"
+import { getWindowsKitsBundle } from "../toolsets/windows"
+import { Target } from "../core"
+import { getTemplatePath } from "../util/pathManager"
+import { VmManager } from "../vm/vm"
+import { WinPackager } from "../winPackager"
+import { createStageDir } from "./targetUtil"
+import { isOldWin6 } from "../toolsets/windows"
+import {
+  APPX_ASSETS_DIR_NAME,
+  buildCapabilitiesXml,
+  buildExtensionsXml,
+  computeUserAssets,
+  defaultTileTag,
+  escapeXmlAttr,
+  isScaledAssetsProvided,
+  lockScreenTag,
+  resourceLanguageTag,
+  splashScreenTag,
+  validateApplicationId,
+  validateIdentityName,
+} from "./appxUtil"
+import { MsixWindowsService } from "../options/MsixOptions"
+
+export default class MsixTarget extends Target {
+  readonly options: MsixOptions = deepAssign({}, this.packager.platformSpecificBuildOptions, this.packager.config.msix)
+
+  isAsyncSupported = false
+
+  private readonly builtPackages = new Map<Arch, string>()
+  private vendorPathKit: string | null = null
+  private vm: VmManager | null = null
+
+  constructor(
+    private readonly packager: WinPackager,
+    readonly outDir: string
+  ) {
+    super("msix")
+
+    if (process.platform !== "darwin" && (process.platform !== "win32" || isOldWin6())) {
+      throw new Error("MSIX is supported only on Windows 10 or Windows Server 2012 R2 (version number 6.3+)")
+    }
+  }
+
+  async build(appOutDir: string, arch: Arch): Promise<any> {
+    const packager = this.packager
+    const artifactName = packager.expandArtifactBeautyNamePattern(this.options, "msix", arch)
+    const artifactPath = path.join(this.outDir, artifactName)
+    await packager.info.emitArtifactBuildStarted({
+      targetPresentableName: "MSIX",
+      file: artifactPath,
+      arch,
+    })
+
+    const vendorPath = await getWindowsKitsBundle({ winCodeSign: packager.config.toolsets?.winCodeSign, arch })
+    const vm = await packager.vm.value
+
+    // Cache for use in finishBuild
+    this.vendorPathKit = vendorPath.kit
+    this.vm = vm
+
+    this.builtPackages.set(arch, artifactPath)
+
+    const stageDir = await createStageDir(this, packager, arch)
+
+    const mappingFile = stageDir.getTempFile("mapping.txt")
+    const makeAppXArgs = ["pack", "/o", "/f", vm.toVmFile(mappingFile), "/p", vm.toVmFile(artifactPath)]
+    if (packager.compression === "store") {
+      makeAppXArgs.push("/nc")
+    }
+
+    const mappingList: Array<Array<string>> = []
+    mappingList.push(
+      await Promise.all(
+        (await walk(appOutDir)).map(file => {
+          let msixPath = file.substring(appOutDir.length + 1)
+          if (path.sep !== "\\") {
+            msixPath = msixPath.replace(/\//g, "\\")
+          }
+          return `"${vm.toVmFile(file)}" "app\\${msixPath}"`
+        })
+      )
+    )
+
+    const userAssetDir = await packager.getResource(undefined, APPX_ASSETS_DIR_NAME)
+    const assetInfo = await computeUserAssets(vm, vendorPath.appxAssets, userAssetDir)
+    const userAssets = assetInfo.userAssets
+
+    const manifestFile = stageDir.getTempFile("AppxManifest.xml")
+    await this.writeManifest(manifestFile, arch, await this.computePublisherName(), userAssets)
+
+    await packager.info.emitAppxManifestCreated(manifestFile)
+    mappingList.push(assetInfo.mappings)
+    mappingList.push([`"${vm.toVmFile(manifestFile)}" "AppxManifest.xml"`])
+
+    if (isScaledAssetsProvided(userAssets)) {
+      const outFile = vm.toVmFile(stageDir.getTempFile("resources.pri"))
+      const makePriPath = vm.toVmFile(path.join(vendorPath.kit, "makepri.exe"))
+
+      const assetRoot = stageDir.getTempFile("appx/assets")
+      await emptyDir(assetRoot)
+      await Promise.all(assetInfo.allAssets.map(it => copyOrLinkFile(it, path.join(assetRoot, path.basename(it)))))
+
+      await vm.exec(makePriPath, [
+        "new",
+        "/Overwrite",
+        "/Manifest",
+        vm.toVmFile(manifestFile),
+        "/ProjectRoot",
+        vm.toVmFile(path.dirname(assetRoot)),
+        "/ConfigXml",
+        vm.toVmFile(path.join(getTemplatePath("appx"), "priconfig.xml")),
+        "/OutputFile",
+        outFile,
+      ])
+
+      for (const resourceFile of (await readdir(stageDir.dir)).filter(it => it.startsWith("resources.")).sort()) {
+        mappingList.push([`"${vm.toVmFile(stageDir.getTempFile(resourceFile))}" "${resourceFile}"`])
+      }
+      makeAppXArgs.push("/l")
+    }
+
+    let mapping = "[Files]"
+    for (const list of mappingList) {
+      mapping += "\r\n" + list.join("\r\n")
+    }
+    await writeFile(mappingFile, mapping)
+    packager.debugLogger.add("msix.mapping", mapping)
+
+    if (this.options.makeappxArgs != null) {
+      makeAppXArgs.push(...this.options.makeappxArgs)
+    }
+
+    this.buildQueueManager.add(async () => {
+      await vm.exec(vm.toVmFile(path.join(vendorPath.kit, "makeappx.exe")), makeAppXArgs)
+      await packager.signIf(artifactPath)
+      await stageDir.cleanup()
+      await packager.info.emitArtifactBuildCompleted({
+        file: artifactPath,
+        packager,
+        arch,
+        safeArtifactName: packager.computeSafeArtifactName(artifactName, "msix"),
+        target: this,
+        isWriteUpdateInfo: this.options.electronUpdaterAware,
+      })
+    })
+  }
+
+  async finishBuild(): Promise<void> {
+    await super.finishBuild()
+
+    const packagePaths = Array.from(this.builtPackages.values())
+    if (packagePaths.length === 0) {
+      return
+    }
+
+    let bundlePath: string | undefined
+    if (this.options.createMsixbundle !== false && packagePaths.length > 1) {
+      bundlePath = await this.createMsixBundle(packagePaths)
+    }
+
+    if (this.options.createMsixupload === true) {
+      await this.createMsixUpload(bundlePath ?? packagePaths[0])
+    }
+  }
+
+  private async createMsixBundle(packagePaths: ReadonlyArray<string>): Promise<string> {
+    const packager = this.packager
+    const vm = this.vm!
+    const kitPath = this.vendorPathKit!
+
+    const bundleName = packager.expandArtifactBeautyNamePattern(this.options, "msixbundle", Arch.x64)
+    const bundlePath = path.join(this.outDir, bundleName)
+
+    await packager.info.emitArtifactBuildStarted({
+      targetPresentableName: "MSIX Bundle",
+      file: bundlePath,
+      arch: null,
+    })
+
+    const stagingDir = path.join(this.outDir, ".msixbundle-staging")
+    await mkdirs(stagingDir)
+    try {
+      await Promise.all(packagePaths.map(p => copyOrLinkFile(p, path.join(stagingDir, path.basename(p)))))
+      await vm.exec(vm.toVmFile(path.join(kitPath, "makeappx.exe")), ["bundle", "/o", "/d", vm.toVmFile(stagingDir), "/p", vm.toVmFile(bundlePath)])
+    } finally {
+      await remove(stagingDir)
+    }
+
+    await packager.signIf(bundlePath)
+
+    await packager.info.emitArtifactBuildCompleted({
+      file: bundlePath,
+      packager,
+      arch: null,
+      safeArtifactName: packager.computeSafeArtifactName(bundleName, "msixbundle"),
+      target: this,
+      isWriteUpdateInfo: false,
+    })
+
+    return bundlePath
+  }
+
+  private async createMsixUpload(sourcePath: string): Promise<void> {
+    const packager = this.packager
+    const uploadName = packager.expandArtifactBeautyNamePattern(this.options, "msixupload", Arch.x64)
+    const uploadPath = path.join(this.outDir, uploadName)
+
+    await packager.info.emitArtifactBuildStarted({
+      targetPresentableName: "MSIX Upload",
+      file: uploadPath,
+      arch: null,
+    })
+
+    const sevenZa = await getPath7za()
+    await exec(sevenZa, ["a", "-tzip", uploadPath, sourcePath])
+
+    await packager.info.emitArtifactBuildCompleted({
+      file: uploadPath,
+      packager,
+      arch: null,
+      safeArtifactName: packager.computeSafeArtifactName(uploadName, "msixupload"),
+      target: this,
+      isWriteUpdateInfo: false,
+    })
+  }
+
+  private async computePublisherName() {
+    const signtoolManager = await this.packager.signingManager.value
+    return signtoolManager.computePublisherName(this, this.options.publisher)
+  }
+
+  private async writeManifest(outFile: string, arch: Arch, publisher: string, userAssets: Array<string>) {
+    const appInfo = this.packager.appInfo
+    const options = this.options
+    const executable = `app\\${appInfo.productFilename}.exe`
+    const displayName = options.displayName || appInfo.productName
+    const capabilities = this.getCapabilities()
+    const extensions = await this.getExtensions(executable, displayName)
+    const defaultMinVersion = arch === Arch.arm64 ? "10.0.17763.0" : "10.0.17763.0"
+
+    const customManifestPath = await this.packager.getResource(options.customManifestPath)
+    if (customManifestPath) {
+      log.info({ manifestPath: log.filePath(customManifestPath) }, "custom msix manifest found")
+    }
+    const manifestFileContent = await readFile(customManifestPath || path.join(getTemplatePath("msix"), "appxmanifest.xml"), "utf8")
+    const manifest = manifestFileContent.replace(/\${([a-zA-Z0-9]+)}/g, (match, p1): string => {
+      switch (p1) {
+        case "publisher":
+          return publisher
+
+        case "publisherDisplayName": {
+          const name = options.publisherDisplayName || appInfo.companyName
+          if (name == null) {
+            throw new Error(`Please specify "author" in the application package.json — it is required because "msix.publisherDisplayName" is not set.`)
+          }
+          return name
+        }
+
+        case "version":
+          return appInfo.getVersionInWeirdWindowsForm(options.setBuildNumber === true)
+
+        case "applicationId":
+          return resolveMsixApplicationId(options.applicationId, options.identityName, appInfo.name)
+
+        case "identityName":
+          return resolveMsixIdentityName(options.identityName, appInfo.name)
+
+        case "executable":
+          return executable
+
+        case "displayName":
+          return displayName
+
+        case "description":
+          return appInfo.description || appInfo.productName
+
+        case "backgroundColor":
+          return options.backgroundColor || "#464646"
+
+        case "logo":
+          return "assets\\StoreLogo.png"
+
+        case "square150x150Logo":
+          return "assets\\Square150x150Logo.png"
+
+        case "square44x44Logo":
+          return "assets\\Square44x44Logo.png"
+
+        case "lockScreen":
+          return lockScreenTag(userAssets)
+
+        case "defaultTile":
+          return defaultTileTag(userAssets, options.showNameOnTiles || false)
+
+        case "splashScreen":
+          return splashScreenTag(userAssets)
+
+        case "arch":
+          return arch === Arch.ia32 ? "x86" : arch === Arch.arm64 ? "arm64" : "x64"
+
+        case "resourceLanguages":
+          return resourceLanguageTag(asArray(options.languages))
+
+        case "capabilities":
+          return capabilities
+
+        case "extensions":
+          return extensions
+
+        case "minVersion":
+          return options.minVersion || defaultMinVersion
+
+        case "maxVersionTested":
+          return options.maxVersionTested || options.minVersion || defaultMinVersion
+
+        case "sharedPackageContainer":
+          return buildSharedPackageContainerXml(options.sharedPackageContainer)
+
+        default:
+          throw new Error(`Macro ${p1} is not defined`)
+      }
+    })
+    await writeFile(outFile, manifest)
+  }
+
+  private getCapabilities(): string {
+    const inner = buildCapabilitiesXml(this.options.capabilities)
+    const integrity = this.options.enforcePackageIntegrity === true ? '\n  <uap10:PackageIntegrity Level="turnOn" />' : ""
+    return `<Capabilities>\n${inner}${integrity}\n</Capabilities>`
+  }
+
+  private async getExtensions(executable: string, displayName: string): Promise<string> {
+    const packager = this.packager
+    const options = this.options
+
+    const baseExtensions = await buildExtensionsXml({
+      protocols: asArray(packager.config.protocols).concat(asArray(packager.platformSpecificBuildOptions.protocols)),
+      fileAssociations: asArray(packager.config.fileAssociations).concat(asArray(packager.platformSpecificBuildOptions.fileAssociations)),
+      addAutoLaunchExtension: options.addAutoLaunchExtension,
+      customExtensionsPath: options.customExtensionsPath,
+      appDir: packager.info.appDir,
+      executable,
+      displayName,
+      dependencyNames: packager.info.metadata.dependencies,
+    })
+
+    const servicesXml = buildWindowsServicesXml(options.windowsServices, executable)
+    const startMenuXml = buildStartMenuGroupXml(options.startMenuGroup, displayName)
+
+    if (!servicesXml && !startMenuXml) {
+      return baseExtensions
+    }
+
+    if (baseExtensions === "") {
+      return `<Extensions>${servicesXml}${startMenuXml}</Extensions>`
+    }
+
+    // Insert MSIX-specific extensions before the closing tag
+    return baseExtensions.replace(/<\/Extensions>$/, `${servicesXml}${startMenuXml}</Extensions>`)
+  }
+}
+
+function resolveMsixApplicationId(applicationId: string | undefined, identityName: string | null | undefined, appName: string): string {
+  let result: string
+  const identitynumber = parseInt(identityName as string, 10) || NaN
+
+  if (applicationId) {
+    result = applicationId
+  } else if (!isNaN(identitynumber) && identityName !== null && identityName !== undefined) {
+    if (identityName[0] === "0") {
+      log.warn(`Remove the 0${identitynumber}`)
+      result = identityName.replace("0" + identitynumber.toString(), "")
+    } else {
+      log.warn(`Remove the ${identitynumber}`)
+      result = identityName.replace(identitynumber.toString(), "")
+    }
+  } else {
+    result = identityName || appName
+  }
+
+  validateApplicationId(result, "MSIX")
+  return result
+}
+
+function resolveMsixIdentityName(identityName: string | null | undefined, appName: string): string {
+  const result = identityName || appName
+  validateIdentityName(result, "MSIX")
+  return result
+}
+
+function buildWindowsServicesXml(services: ReadonlyArray<MsixWindowsService> | undefined, defaultExecutable: string): string {
+  if (!services || services.length === 0) {
+    return ""
+  }
+  return services
+    .map(svc => {
+      const exe = escapeXmlAttr(svc.executable || defaultExecutable)
+      const startType = escapeXmlAttr(svc.startType ?? "auto")
+      const argsAttr = svc.arguments ? ` Arguments="${escapeXmlAttr(svc.arguments)}"` : ""
+      return `
+        <desktop6:Extension Category="windows.service" Executable="${exe}" EntryPoint="Windows.FullTrustApplication">
+          <desktop6:Service Name="${escapeXmlAttr(svc.name)}" StartType="${startType}"${argsAttr} />
+        </desktop6:Extension>`
+    })
+    .join("")
+}
+
+function buildSharedPackageContainerXml(container: MsixOptions["sharedPackageContainer"]): string {
+  if (!container) {
+    return ""
+  }
+  const members = (container.memberPackages ?? []).map(pkg => `    <desktop9:Package FamilyName="${escapeXmlAttr(pkg)}" />`).join("\n")
+  return `<desktop9:SharedPackageContainer Name="${escapeXmlAttr(container.name)}">\n${members}\n  </desktop9:SharedPackageContainer>`
+}
+
+function buildStartMenuGroupXml(startMenuGroup: string | undefined, displayName: string): string {
+  if (!startMenuGroup) {
+    return ""
+  }
+  return `
+        <desktop7:Extension Category="windows.appMigration">
+          <desktop7:AppMigration AumId="${escapeXmlAttr(displayName)}" DeepLink="" />
+        </desktop7:Extension>`
+}
+
+// Re-export interface so consumers can reference MsixOptions without a separate import
+export type { MsixOptions }

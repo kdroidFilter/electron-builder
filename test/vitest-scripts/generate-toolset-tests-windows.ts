@@ -10,6 +10,7 @@ import type * as _MsiSuite from "../src/windows/msiTestSuite"
 import type * as _MsiWrappedSuite from "../src/windows/msiWrappedTestSuite"
 import type * as _SquirrelWindowsSuite from "../src/windows/squirrelWindowsTestSuite"
 import type * as _AppxSuite from "../src/windows/appxTestSuite"
+import type * as _MsixSuite from "../src/windows/msixTestSuite"
 import type * as _DifferentialWinSuite from "../src/updater/differentialUpdateWinSuite"
 import type * as _BlackboxWinSuite from "../src/updater/blackboxUpdateWinSuite"
 
@@ -70,6 +71,13 @@ const SUITES: WindowsSuiteConfig[] = [
     registerFn: namedFn("registerAppxTests" satisfies keyof typeof _AppxSuite),
     importPath: "windows/appxTestSuite",
     describeConfig: { name: "AppX", chain: ["ifWindows"] },
+    winCodeSignVersions: ["1.0.0", "1.1.0"],
+  },
+  {
+    name: "msix",
+    registerFn: namedFn("registerMsixTests" satisfies keyof typeof _MsixSuite),
+    importPath: "windows/msixTestSuite",
+    describeConfig: { name: "MSIX", chain: ["ifWindows"] },
     winCodeSignVersions: ["1.0.0", "1.1.0"],
   },
   {

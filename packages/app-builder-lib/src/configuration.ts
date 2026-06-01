@@ -7,6 +7,7 @@ import { AppImageOptions, DebOptions, FlatpakOptions, LinuxConfiguration, LinuxT
 import { DmgOptions, MacConfiguration, MasConfiguration } from "./options/macOptions"
 import { MsiOptions } from "./options/MsiOptions"
 import { MsiWrappedOptions } from "./options/MsiWrappedOptions"
+import { MsixOptions } from "./options/MsixOptions"
 import { PkgOptions } from "./options/pkgOptions"
 import { PlatformSpecificBuildOptions } from "./options/PlatformSpecificBuildOptions"
 import { SnapcraftOptions, SnapOptions } from "./options/SnapOptions"
@@ -85,6 +86,8 @@ export interface CommonConfiguration {
   readonly portable?: PortableOptions | null
   /** Windows Store (AppX) package options. */
   readonly appx?: AppXOptions | null
+  /** MSIX package options. MSIX is the modern successor to AppX with additional deployment features. */
+  readonly msix?: MsixOptions | null
   /**
    * MSI package options.
    */
