@@ -8,7 +8,8 @@
    xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
    xmlns:desktop7="http://schemas.microsoft.com/appx/manifest/desktop/windows10/7"
    xmlns:desktop9="http://schemas.microsoft.com/appx/manifest/desktop/windows10/9"
-   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
+   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+   IgnorableNamespaces="uap10 desktop6 desktop7 desktop9">
   <!-- use single quotes to avoid double quotes escaping in the publisher value  -->
   <Identity Name="${identityName}"
     ProcessorArchitecture="${arch}"

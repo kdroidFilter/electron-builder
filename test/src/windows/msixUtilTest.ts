@@ -384,9 +384,18 @@ test("buildWindowsServicesXml: generates service extension", ({ expect }) => {
   expect(result).toContain('Category="windows.service"')
   expect(result).toContain('Name="MySvc"')
   expect(result).toContain('Executable="app\\App.exe"')
-  // desktop6:Service schema does not include StartType or Arguments attributes
-  expect(result).not.toContain("StartType")
+  expect(result).toContain('StartupType="manual"')
   expect(result).not.toContain("Arguments")
+})
+
+test("buildWindowsServicesXml: respects explicit startupType", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: "AutoSvc", startupType: "auto" }], "app\\App.exe")
+  expect(result).toContain('StartupType="auto"')
+})
+
+test("buildWindowsServicesXml: includes Arguments when set", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: "MySvc", arguments: "--daemon" }], "app\\App.exe")
+  expect(result).toContain('Arguments="--daemon"')
 })
 
 test("buildWindowsServicesXml: uses custom executable when provided", ({ expect }) => {

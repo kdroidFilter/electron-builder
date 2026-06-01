@@ -147,9 +147,10 @@ export function installMsixNative(msixPath: string, identityName: string): MsixI
     `    Write-Output "CERT_THUMBPRINT:$certThumb"`,
     `}`,
     `$existing = Get-AppxPackage -Name '${identityName}' -ErrorAction SilentlyContinue`,
-    `if ($existing) { Remove-AppxPackage -Package $existing.PackageFullName }`,
-    `Add-AppxPackage -Path '${msixPath.replace(/'/g, "''")}'`,
+    `if ($existing) { Remove-AppxPackage -Package $existing.PackageFullName -ErrorAction Stop }`,
+    `Add-AppxPackage -Path '${msixPath.replace(/'/g, "''")}' -ErrorAction Stop`,
     `$pkg = Get-AppxPackage -Name '${identityName}'`,
+    `if (-not $pkg) { Write-Error "Package '${identityName}' not found after installation"; exit 1 }`,
     `Write-Output "PFN:$($pkg.PackageFamilyName)"`,
     `Write-Output "INSTALL_LOCATION:$($pkg.InstallLocation)"`,
   ].join("\n")
@@ -158,7 +159,11 @@ export function installMsixNative(msixPath: string, identityName: string): MsixI
   require("fs").writeFileSync(scriptPath, certScript)
   let output: string
   try {
-    output = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath], { encoding: "utf8" })
+    output = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] })
+  } catch (err: any) {
+    const stderr = err.stderr ? `\nStderr: ${err.stderr}` : ""
+    const stdout = err.stdout ? `\nStdout: ${err.stdout}` : ""
+    throw new Error(`MSIX install failed: ${err.message}${stderr}${stdout}`)
   } finally {
     try {
       require("fs").unlinkSync(scriptPath)

@@ -8,6 +8,15 @@ export interface MsixWindowsService {
    * Defaults to the main app executable.
    */
   readonly executable?: string
+  /**
+   * How Windows starts the service. Required by the desktop6 schema.
+   * @default "manual"
+   */
+  readonly startupType?: "auto" | "manual" | "systemGuarded"
+  /**
+   * Optional command-line arguments passed to the service executable.
+   */
+  readonly arguments?: string
 }
 
 export interface MsixSharedPackageContainer {

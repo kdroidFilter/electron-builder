@@ -129,6 +129,7 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
           const fileContent = await readFile(filepath, "utf-8")
           expect(fileContent).toContain("desktop6:Extension")
           expect(fileContent).toContain("MyBackgroundService")
+          expect(fileContent).toContain('StartupType="manual"')
           expect(fileContent).toContain("xmlns:desktop6=")
         },
       },
