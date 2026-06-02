@@ -72,7 +72,9 @@ export {
   CustomWindowsSignTaskConfiguration,
   FileCodeSigningInfo,
   WindowsSignTaskConfiguration,
+  WindowsSignToolManager,
 } from "./codeSign/windowsSignToolManager"
+export { ToolInfo } from "./util/bundledTool"
 export { ForgeOptions, buildForge } from "./forge-maker"
 export { Framework, PrepareApplicationStageDirectoryOptions } from "./Framework"
 export { LinuxPackager } from "./linuxPackager"
