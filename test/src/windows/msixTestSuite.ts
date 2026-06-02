@@ -207,7 +207,7 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
       }
     ))
 
-  test("msix multi-arch build creates msixbundle", ({ expect }) =>
+  test("msix multi-arch build creates msixbundle and msixupload", ({ expect }) =>
     app(
       expect,
       {
@@ -216,6 +216,7 @@ export function registerMsixTests(toolsets: ToolsetConfig): void {
           toolsets,
           msix: {
             createMsixbundle: true,
+            createMsixupload: true,
           },
         },
       },

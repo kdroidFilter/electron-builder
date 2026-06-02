@@ -21,6 +21,7 @@ import {
   resolvePackageIdentityName,
   resourceLanguageTag,
   splashScreenTag,
+  substituteManifestMacros,
 } from "./appxUtil"
 
 export default class AppXTarget extends Target {
@@ -160,7 +161,7 @@ export default class AppXTarget extends Target {
       log.info({ manifestPath: log.filePath(customManifestPath) }, "custom appx manifest found")
     }
     const manifestFileContent = await readFile(customManifestPath || path.join(getTemplatePath("appx"), "appxmanifest.xml"), "utf8")
-    const manifest = manifestFileContent.replace(/\${([a-zA-Z0-9]+)}/g, (match, p1): string => {
+    const manifest = substituteManifestMacros(manifestFileContent, (p1): string => {
       switch (p1) {
         case "publisher":
           return publisher

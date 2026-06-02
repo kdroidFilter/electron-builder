@@ -133,17 +133,22 @@ export async function launchMsixAppInVm(vm: VmManager, installLocation: string, 
  * Installs an MSIX package on native Windows (assumes test is running as admin).
  */
 export function installMsixNative(msixPath: string, identityName: string): MsixInstallResult {
-  // Trust the signing cert
+  // Trust the signing cert. Add-AppxPackage (no -AllowUnsigned) requires the signer's chain to
+  // validate to a trusted root. The test cert is self-signed, so it must be present in the
+  // LocalMachine\Root (Trusted Root CAs) store; TrustedPeople alone is insufficient for a
+  // non-chained self-signed cert and yields 0x800B0109 CERT_E_UNTRUSTEDROOT.
   const certScript = [
     `$sig = Get-AuthenticodeSignature -FilePath '${msixPath.replace(/'/g, "''")}' -ErrorAction SilentlyContinue`,
     `$certThumb = ''`,
     `if ($sig -and $sig.SignerCertificate) {`,
     `    $cert = $sig.SignerCertificate`,
     `    $certThumb = $cert.Thumbprint`,
-    `    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPeople', 'LocalMachine')`,
-    `    $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)`,
-    `    $store.Add($cert)`,
-    `    $store.Close()`,
+    `    foreach ($storeName in @('Root', 'TrustedPeople')) {`,
+    `        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'LocalMachine')`,
+    `        $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)`,
+    `        $store.Add($cert)`,
+    `        $store.Close()`,
+    `    }`,
     `    Write-Output "CERT_THUMBPRINT:$certThumb"`,
     `}`,
     `$existing = Get-AppxPackage -Name '${identityName}' -ErrorAction SilentlyContinue`,
@@ -190,11 +195,13 @@ export function uninstallMsixNative(packageFamilyName: string, certThumbprint: s
     `if ($pkg) { Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue }`,
     ...(certThumbprint
       ? [
-          `$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPeople', 'LocalMachine')`,
-          `$store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)`,
-          `$toRemove = $store.Certificates | Where-Object { $_.Thumbprint -eq '${certThumbprint}' }`,
-          `foreach ($c in $toRemove) { $store.Remove($c) }`,
-          `$store.Close()`,
+          `foreach ($storeName in @('Root', 'TrustedPeople')) {`,
+          `    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'LocalMachine')`,
+          `    $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)`,
+          `    $toRemove = $store.Certificates | Where-Object { $_.Thumbprint -eq '${certThumbprint}' }`,
+          `    foreach ($c in $toRemove) { $store.Remove($c) }`,
+          `    $store.Close()`,
+          `}`,
         ]
       : []),
   ]

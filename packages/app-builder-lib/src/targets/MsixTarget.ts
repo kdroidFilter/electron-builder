@@ -25,6 +25,7 @@ import {
   resolvePackageIdentityName,
   resourceLanguageTag,
   splashScreenTag,
+  substituteManifestMacros,
 } from "./appxUtil"
 
 export default class MsixTarget extends Target {
@@ -260,7 +261,7 @@ export default class MsixTarget extends Target {
       log.info({ manifestPath: log.filePath(customManifestPath) }, "custom msix manifest found")
     }
     const manifestFileContent = await readFile(customManifestPath || path.join(getTemplatePath("msix"), "appxmanifest.xml"), "utf8")
-    const manifest = manifestFileContent.replace(/\${([a-zA-Z0-9]+)}/g, (match, p1): string => {
+    const manifest = substituteManifestMacros(manifestFileContent, (p1): string => {
       switch (p1) {
         case "publisher":
           return publisher

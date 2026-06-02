@@ -122,6 +122,10 @@ test("resourceLanguageTag: trims whitespace around language codes", ({ expect })
   expect(resourceLanguageTag([" en-US "])).toBe('<Resource Language="en-US" />')
 })
 
+test("resourceLanguageTag: escapes special characters in the language tag", ({ expect }) => {
+  expect(resourceLanguageTag(['en"&<x'])).toBe('<Resource Language="en&quot;&amp;&lt;x" />')
+})
+
 // ─── lockScreenTag ────────────────────────────────────────────────────────────
 
 test("lockScreenTag: returns empty string when no BadgeLogo asset", ({ expect }) => {
@@ -320,6 +324,47 @@ test("buildExtensionsXml: handles multiple file associations each with multiple 
   expect(result).toContain('Name="txt"')
   expect(result).toContain('Name="log"')
   expect(result).toContain('Name="md"')
+})
+
+test("buildExtensionsXml: escapes special chars in protocol scheme and name", async ({ expect }) => {
+  const result = await buildExtensionsXml({
+    protocols: [{ name: 'My "App" & <Proto>', schemes: ['my"app&<x>'] }],
+    fileAssociations: [],
+    appDir: "/some/dir",
+    executable: "app\\MyApp.exe",
+    displayName: "My App",
+  })
+  expect(result).toContain('Name="my&quot;app&amp;&lt;x&gt;"')
+  expect(result).toContain("My &quot;App&quot; &amp; &lt;Proto&gt;")
+  // raw, unescaped special characters must not leak into the markup
+  expect(result).not.toContain('my"app')
+  expect(result).not.toContain("<Proto>")
+})
+
+test("buildExtensionsXml: escapes special chars in file association ext", async ({ expect }) => {
+  const result = await buildExtensionsXml({
+    protocols: [],
+    fileAssociations: [{ ext: 'x"&<y' }],
+    appDir: "/some/dir",
+    executable: "app\\MyApp.exe",
+    displayName: "My App",
+  })
+  expect(result).toContain('Name="x&quot;&amp;&lt;y"')
+  expect(result).toContain(".x&quot;&amp;&lt;y")
+  expect(result).not.toContain('x"&<y')
+})
+
+test("buildExtensionsXml: escapes special chars in auto-launch displayName and executable", async ({ expect }) => {
+  const result = await buildExtensionsXml({
+    protocols: [],
+    fileAssociations: [],
+    appDir: "/some/dir",
+    executable: 'app\\My "App".exe',
+    displayName: "A & B <c>",
+    addAutoLaunchExtension: true,
+  })
+  expect(result).toContain('Executable="app\\My &quot;App&quot;.exe"')
+  expect(result).toContain('DisplayName="A &amp; B &lt;c&gt;"')
 })
 
 // ─── resolvePackageApplicationId ─────────────────────────────────────────────

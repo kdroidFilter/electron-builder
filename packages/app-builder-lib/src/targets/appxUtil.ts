@@ -10,9 +10,44 @@ import { CAPABILITIES, isValidCapabilityName } from "./AppxCapabilities"
 
 export const APPX_ASSETS_DIR_NAME = "appx"
 
-/** Escapes a string for safe use as an XML attribute value (double-quoted). */
+/** Escapes a string for safe use as an XML attribute value (double-quoted). Also valid for element text. */
 export function escapeXmlAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+/**
+ * Manifest macros whose substituted values are raw user/config text and therefore must be
+ * XML-escaped before being placed into the (Appx/MSIX) manifest. Every other macro either
+ * returns a prebuilt XML fragment (capabilities, extensions, lockScreen, defaultTile,
+ * splashScreen, resourceLanguages, sharedPackageContainer, packageIntegrity) or a
+ * validated/constant value (version, applicationId, identityName, arch, logo, square*Logo)
+ * and must NOT be escaped.
+ *
+ * Note: `publisher` is emitted inside a single-quoted attribute (`Publisher='...'`). escapeXmlAttr
+ * covers `& < >` (and harmlessly `"`), but not `'`; a `'` in a certificate CN remains a known
+ * limitation of the single-quoted template.
+ */
+export const RAW_TEXT_MANIFEST_MACROS: ReadonlySet<string> = new Set([
+  "publisher",
+  "publisherDisplayName",
+  "executable",
+  "displayName",
+  "description",
+  "backgroundColor",
+  "minVersion",
+  "maxVersionTested",
+])
+
+/**
+ * Substitutes `${macro}` placeholders in an Appx/MSIX manifest template. `resolve` returns the
+ * RAW value for a macro; values for macros in {@link RAW_TEXT_MANIFEST_MACROS} are XML-escaped
+ * here so individual call sites cannot forget to. `resolve` may throw for unknown macros.
+ */
+export function substituteManifestMacros(template: string, resolve: (macro: string) => string): string {
+  return template.replace(/\${([a-zA-Z0-9]+)}/g, (_match, macro: string): string => {
+    const value = resolve(macro)
+    return RAW_TEXT_MANIFEST_MACROS.has(macro) ? escapeXmlAttr(value) : value
+  })
 }
 
 export const DEFAULT_RESOURCE_LANG = "en-US"
@@ -104,7 +139,7 @@ export function resourceLanguageTag(userLanguages: Array<string> | Nullish): str
   if (userLanguages == null || userLanguages.length === 0) {
     userLanguages = [DEFAULT_RESOURCE_LANG]
   }
-  return userLanguages.map(it => `<Resource Language="${it.trim().replace(/_/g, "-")}" />`).join("\n")
+  return userLanguages.map(it => `<Resource Language="${escapeXmlAttr(it.trim().replace(/_/g, "-"))}" />`).join("\n")
 }
 
 export function lockScreenTag(userAssets: Array<string>): string {
@@ -227,8 +262,8 @@ export async function buildExtensionsXml(input: ExtensionsInput): Promise<string
 
   if (isAddAutoLaunch) {
     extensions += `
-        <desktop:Extension Category="windows.startupTask" Executable="${executable}" EntryPoint="Windows.FullTrustApplication">
-          <desktop:StartupTask TaskId="SlackStartup" Enabled="true" DisplayName="${displayName}" />
+        <desktop:Extension Category="windows.startupTask" Executable="${escapeXmlAttr(executable)}" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="SlackStartup" Enabled="true" DisplayName="${escapeXmlAttr(displayName)}" />
         </desktop:Extension>`
   }
 
@@ -236,8 +271,8 @@ export async function buildExtensionsXml(input: ExtensionsInput): Promise<string
     for (const scheme of asArray(protocol.schemes)) {
       extensions += `
           <uap:Extension Category="windows.protocol">
-            <uap:Protocol Name="${scheme}">
-               <uap:DisplayName>${protocol.name}</uap:DisplayName>
+            <uap:Protocol Name="${escapeXmlAttr(scheme)}">
+               <uap:DisplayName>${escapeXmlAttr(protocol.name)}</uap:DisplayName>
              </uap:Protocol>
           </uap:Extension>`
     }
@@ -245,11 +280,12 @@ export async function buildExtensionsXml(input: ExtensionsInput): Promise<string
 
   for (const fileAssociation of fileAssociations) {
     for (const ext of asArray(fileAssociation.ext)) {
+      const extEsc = escapeXmlAttr(ext)
       extensions += `
           <uap:Extension Category="windows.fileTypeAssociation">
-            <uap:FileTypeAssociation Name="${ext}">
+            <uap:FileTypeAssociation Name="${extEsc}">
               <uap:SupportedFileTypes>
-                <uap:FileType>.${ext}</uap:FileType>
+                <uap:FileType>.${extEsc}</uap:FileType>
               </uap:SupportedFileTypes>
             </uap:FileTypeAssociation>
           </uap:Extension>`
