@@ -130,38 +130,46 @@ export async function launchMsixAppInVm(vm: VmManager, installLocation: string, 
 // ─── native Windows ───────────────────────────────────────────────────────────
 
 /**
- * Installs an MSIX package on native Windows (assumes test is running as admin).
+ * Installs an MSIX / .msixbundle on native Windows by extracting it to a loose layout and
+ * registering it (`Add-AppxPackage -Register AppxManifest.xml`) — the standard dev-loop install,
+ * which needs only Developer Mode (AllowDevelopmentWithoutDevLicense=1): NOT admin and NOT a
+ * trusted signature. (A packed .msix cannot be deployed via `-AllowUnsigned` — 0x80073D2B, its
+ * content requires a trusted signature — and trusting the self-signed test cert in LocalMachine
+ * would require UAC elevation.)
  */
 export function installMsixNative(msixPath: string, identityName: string): MsixInstallResult {
-  // Trust the signing cert. Add-AppxPackage (no -AllowUnsigned) requires the signer's chain to
-  // validate to a trusted root. The test cert is self-signed, so it must be present in the
-  // LocalMachine\Root (Trusted Root CAs) store; TrustedPeople alone is insufficient for a
-  // non-chained self-signed cert and yields 0x800B0109 CERT_E_UNTRUSTEDROOT.
-  const certScript = [
-    `$sig = Get-AuthenticodeSignature -FilePath '${msixPath.replace(/'/g, "''")}' -ErrorAction SilentlyContinue`,
-    `$certThumb = ''`,
-    `if ($sig -and $sig.SignerCertificate) {`,
-    `    $cert = $sig.SignerCertificate`,
-    `    $certThumb = $cert.Thumbprint`,
-    `    foreach ($storeName in @('Root', 'TrustedPeople')) {`,
-    `        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'LocalMachine')`,
-    `        $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)`,
-    `        $store.Add($cert)`,
-    `        $store.Close()`,
-    `    }`,
-    `    Write-Output "CERT_THUMBPRINT:$certThumb"`,
+  const layoutDir = path.join(require("os").tmpdir(), `eb-msix-reg-${randomUUID()}`)
+  const psScript = [
+    `$ErrorActionPreference = 'Stop'`,
+    `Add-Type -AssemblyName System.IO.Compression.FileSystem`,
+    `$src = '${msixPath.replace(/'/g, "''")}'`,
+    `$layout = '${layoutDir.replace(/'/g, "''")}'`,
+    `$bundleEx = $null`,
+    // A .msixbundle is a container of per-arch .msix packages; register the x64 inner package.
+    `if ($src.ToLower().EndsWith('.msixbundle')) {`,
+    `    $bundleEx = Join-Path $env:TEMP ('eb-msix-bundle-' + [Guid]::NewGuid().ToString())`,
+    `    [System.IO.Compression.ZipFile]::ExtractToDirectory($src, $bundleEx)`,
+    `    $inner = Get-ChildItem $bundleEx -Filter *.msix | Where-Object { $_.Name -match 'x64' } | Select-Object -First 1`,
+    `    if (-not $inner) { $inner = Get-ChildItem $bundleEx -Filter *.msix | Select-Object -First 1 }`,
+    `    if (-not $inner) { Write-Error 'No inner .msix found in bundle'; exit 1 }`,
+    `    $src = $inner.FullName`,
     `}`,
+    // Extract the package to a loose layout (Add-AppxPackage -Register tolerates AppxBlockMap.xml etc.).
+    `if (Test-Path $layout) { Remove-Item $layout -Recurse -Force }`,
+    `[System.IO.Compression.ZipFile]::ExtractToDirectory($src, $layout)`,
+    `if ($bundleEx) { Remove-Item $bundleEx -Recurse -Force -ErrorAction SilentlyContinue }`,
+    // Remove any prior registration of the same package family to avoid version conflicts.
     `$existing = Get-AppxPackage -Name '${identityName}' -ErrorAction SilentlyContinue`,
-    `if ($existing) { Remove-AppxPackage -Package $existing.PackageFullName -ErrorAction Stop }`,
-    `Add-AppxPackage -Path '${msixPath.replace(/'/g, "''")}' -ErrorAction Stop`,
+    `if ($existing) { Remove-AppxPackage -Package $existing.PackageFullName -ErrorAction SilentlyContinue }`,
+    `Add-AppxPackage -Register (Join-Path $layout 'AppxManifest.xml')`,
     `$pkg = Get-AppxPackage -Name '${identityName}'`,
-    `if (-not $pkg) { Write-Error "Package '${identityName}' not found after installation"; exit 1 }`,
+    `if (-not $pkg) { Write-Error "Package '${identityName}' not found after registration"; exit 1 }`,
     `Write-Output "PFN:$($pkg.PackageFamilyName)"`,
     `Write-Output "INSTALL_LOCATION:$($pkg.InstallLocation)"`,
   ].join("\n")
 
   const scriptPath = path.join(require("os").tmpdir(), `.eb-msix-install-${randomUUID()}.ps1`)
-  require("fs").writeFileSync(scriptPath, certScript)
+  require("fs").writeFileSync(scriptPath, psScript)
   let output: string
   try {
     output = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] })
@@ -178,32 +186,26 @@ export function installMsixNative(msixPath: string, identityName: string): MsixI
   }
   const pfnMatch = output.match(/PFN:(\S+)/)
   const locationMatch = output.match(/INSTALL_LOCATION:(.+)/)
-  const thumbMatch = output.match(/CERT_THUMBPRINT:([0-9A-Fa-f]+)/)
   if (!pfnMatch) {
     throw new Error(`PFN not found in powershell output:\n${output}`)
   }
   return {
     packageFamilyName: pfnMatch[1].trim(),
     installLocation: locationMatch ? locationMatch[1].trim() : "",
-    certThumbprint: thumbMatch ? thumbMatch[1].trim() : "",
+    certThumbprint: "", // registration uses no signature/cert
   }
 }
 
-export function uninstallMsixNative(packageFamilyName: string, certThumbprint: string): void {
+export function uninstallMsixNative(packageFamilyName: string, _certThumbprint: string): void {
+  // Remove the package and the loose layout it was registered from (its InstallLocation — an
+  // eb-msix-reg-* temp dir). No cert cleanup needed: registration uses no signature/cert.
   const lines = [
     `$pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq '${packageFamilyName}' } | Select-Object -First 1`,
-    `if ($pkg) { Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue }`,
-    ...(certThumbprint
-      ? [
-          `foreach ($storeName in @('Root', 'TrustedPeople')) {`,
-          `    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'LocalMachine')`,
-          `    $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)`,
-          `    $toRemove = $store.Certificates | Where-Object { $_.Thumbprint -eq '${certThumbprint}' }`,
-          `    foreach ($c in $toRemove) { $store.Remove($c) }`,
-          `    $store.Close()`,
-          `}`,
-        ]
-      : []),
+    `if ($pkg) {`,
+    `  $loc = $pkg.InstallLocation`,
+    `  Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue`,
+    `  if ($loc -and (Split-Path $loc -Leaf).StartsWith('eb-msix-reg-')) { Remove-Item -LiteralPath $loc -Recurse -Force -ErrorAction SilentlyContinue }`,
+    `}`,
   ]
   const scriptPath = path.join(require("os").tmpdir(), `.eb-msix-uninstall-${randomUUID()}.ps1`)
   require("fs").writeFileSync(scriptPath, lines.join("\n"))
