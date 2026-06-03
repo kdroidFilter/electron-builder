@@ -172,7 +172,10 @@ export function installMsixNative(msixPath: string, identityName: string): MsixI
   require("fs").writeFileSync(scriptPath, psScript)
   let output: string
   try {
-    output = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] })
+    output = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    })
   } catch (err: any) {
     const stderr = err.stderr ? `\nStderr: ${err.stderr}` : ""
     const stdout = err.stdout ? `\nStdout: ${err.stdout}` : ""

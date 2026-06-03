@@ -115,7 +115,9 @@ export function validateApplicationId(result: string, contextLabel: string): voi
     throw new InvalidConfigurationError(`${contextLabel} Application.Id must be between 1 and 64 characters in length: ${result}`)
   }
   if (!validCharactersRegex.test(result)) {
-    throw new InvalidConfigurationError(`${contextLabel} Application.Id cannot contain alpha-numeric, period, and dash characters: ${result}"`)
+    throw new InvalidConfigurationError(
+      `${contextLabel} Application.Id must contain only alpha-numeric characters separated by periods, where each segment starts with an alphabetic character: ${result}`
+    )
   }
   if (restrictedApplicationIdValues.includes(result.toUpperCase())) {
     throw new InvalidConfigurationError(`${contextLabel} Application.Id cannot contain restricted values ${JSON.stringify(restrictedApplicationIdValues)}: ${result}`)
@@ -125,13 +127,13 @@ export function validateApplicationId(result: string, contextLabel: string): voi
 export function validateIdentityName(result: string, contextLabel: string): void {
   const validCharactersRegex = /^[a-zA-Z0-9.-]+$/
   if (result.length < 3 || result.length > 50) {
-    throw new InvalidConfigurationError(`${contextLabel} identityName.Id must be between 3 and 50 characters in length: ${result}`)
+    throw new InvalidConfigurationError(`${contextLabel} identityName must be between 3 and 50 characters in length: ${result}`)
   }
   if (!validCharactersRegex.test(result)) {
-    throw new InvalidConfigurationError(`${contextLabel} identityName.Id cannot contain of alpha-numeric, period, and dash characters: ${result}`)
+    throw new InvalidConfigurationError(`${contextLabel} identityName must contain only alpha-numeric, period, and dash characters: ${result}`)
   }
   if (restrictedApplicationIdValues.includes(result.toUpperCase())) {
-    throw new InvalidConfigurationError(`${contextLabel} identityName.Id cannot contain restricted values ${JSON.stringify(restrictedApplicationIdValues)}: ${result}`)
+    throw new InvalidConfigurationError(`${contextLabel} identityName cannot contain restricted values ${JSON.stringify(restrictedApplicationIdValues)}: ${result}`)
   }
 }
 
@@ -308,7 +310,7 @@ export function buildWindowsServicesXml(services: ReadonlyArray<MsixWindowsServi
   return services
     .map(svc => {
       const exe = escapeXmlAttr(svc.executable || defaultExecutable)
-      const startupType = svc.startupType ?? "manual"
+      const startupType = escapeXmlAttr(svc.startupType ?? "manual")
       const argsAttr = svc.arguments != null ? ` Arguments="${escapeXmlAttr(svc.arguments)}"` : ""
       return `
         <desktop6:Extension Category="windows.service" Executable="${exe}" EntryPoint="Windows.FullTrustApplication">
@@ -326,12 +328,12 @@ export function buildSharedPackageContainerXml(container: MsixSharedPackageConta
   return `<desktop9:SharedPackageContainer Name="${escapeXmlAttr(container.name)}">\n${members}\n  </desktop9:SharedPackageContainer>`
 }
 
-export function buildStartMenuGroupXml(startMenuGroup: string | undefined, displayName: string): string {
+export function buildStartMenuGroupXml(startMenuGroup: string | undefined, _displayName: string): string {
   if (!startMenuGroup) {
     return ""
   }
   return `
         <desktop7:Extension Category="windows.appMigration">
-          <desktop7:AppMigration AumId="${escapeXmlAttr(displayName)}" DeepLink="" />
+          <desktop7:AppMigration AumId="${escapeXmlAttr(startMenuGroup)}" DeepLink="" />
         </desktop7:Extension>`
 }

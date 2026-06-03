@@ -85,8 +85,9 @@ export interface MsixOptions extends TargetSpecificOptions {
 
   /**
    * Relative path to a custom AppxManifest.xml template located in the build resources directory.
-   * Supports the same ${} template macros as the default template, plus MSIX-specific ones:
-   * ${packageIntegrity}, ${windowsServices}, ${sharedPackageContainer}, ${startMenuGroups}
+   * Supports the same `${}` template macros as the default template. MSIX-specific macros include:
+   * `${packageIntegrity}`, `${sharedPackageContainer}`. Windows services and start-menu group XML
+   * are both injected via the `${extensions}` macro alongside protocol/file-association extensions.
    */
   readonly customManifestPath?: string
 

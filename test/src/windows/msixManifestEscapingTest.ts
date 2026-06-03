@@ -86,7 +86,21 @@ test("RAW_TEXT_MANIFEST_MACROS: raw-text macros escaped, fragment/constant macro
   for (const m of ["publisher", "publisherDisplayName", "executable", "displayName", "description", "backgroundColor", "minVersion", "maxVersionTested"]) {
     expect(RAW_TEXT_MANIFEST_MACROS.has(m)).toBe(true)
   }
-  for (const m of ["capabilities", "extensions", "lockScreen", "defaultTile", "splashScreen", "resourceLanguages", "sharedPackageContainer", "packageIntegrity", "version", "applicationId", "identityName", "arch", "logo"]) {
+  for (const m of [
+    "capabilities",
+    "extensions",
+    "lockScreen",
+    "defaultTile",
+    "splashScreen",
+    "resourceLanguages",
+    "sharedPackageContainer",
+    "packageIntegrity",
+    "version",
+    "applicationId",
+    "identityName",
+    "arch",
+    "logo",
+  ]) {
     expect(RAW_TEXT_MANIFEST_MACROS.has(m)).toBe(false)
   }
 })

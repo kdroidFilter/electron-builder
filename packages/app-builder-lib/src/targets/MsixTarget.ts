@@ -44,7 +44,7 @@ export default class MsixTarget extends Target {
     super("msix")
 
     if (process.platform !== "darwin" && (process.platform !== "win32" || isOldWin6())) {
-      throw new Error("MSIX is supported only on Windows 10 or Windows Server 2012 R2 (version number 6.3+)")
+      throw new Error("MSIX is supported on Windows 10 or Windows Server 2012 R2 (version number 6.3+) and on macOS via Parallels Desktop")
     }
   }
 

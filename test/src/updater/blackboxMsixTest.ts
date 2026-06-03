@@ -296,11 +296,9 @@ describe.heavy("msix", optionsForFlakyE2E, () => {
       // Verify the installed manifest contains the PackageIntegrity element
       let manifestXml: string
       if (canNativeInstall) {
-        const psOut = require("child_process").execFileSync(
-          "powershell.exe",
-          ["-NoProfile", "-NonInteractive", "-Command", manifestQueryPs(result.packageFamilyName)],
-          { encoding: "utf8" }
-        )
+        const psOut = require("child_process").execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", manifestQueryPs(result.packageFamilyName)], {
+          encoding: "utf8",
+        })
         manifestXml = psOut
       } else {
         manifestXml = await vm!.exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", manifestQueryPs(result.packageFamilyName)])
@@ -430,11 +428,9 @@ describe.heavy("msix", optionsForFlakyE2E, () => {
       // Verify manifest via Get-AppxPackageManifest
       let manifestXml: string
       if (canNativeInstall) {
-        manifestXml = require("child_process").execFileSync(
-          "powershell.exe",
-          ["-NoProfile", "-NonInteractive", "-Command", manifestQueryPs(result.packageFamilyName)],
-          { encoding: "utf8" }
-        )
+        manifestXml = require("child_process").execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", manifestQueryPs(result.packageFamilyName)], {
+          encoding: "utf8",
+        })
       } else {
         manifestXml = await vm!.exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", manifestQueryPs(result.packageFamilyName)])
       }

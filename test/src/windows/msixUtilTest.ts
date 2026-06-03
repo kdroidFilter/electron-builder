@@ -57,8 +57,8 @@ test("validateApplicationId: rejects id that is too long (>64)", ({ expect }) =>
 })
 
 test("validateApplicationId: rejects id with invalid characters", ({ expect }) => {
-  expect(() => validateApplicationId("My-App", "Test")).toThrow("cannot contain")
-  expect(() => validateApplicationId("1App", "Test")).toThrow("cannot contain")
+  expect(() => validateApplicationId("My-App", "Test")).toThrow("must contain only")
+  expect(() => validateApplicationId("1App", "Test")).toThrow("must contain only")
 })
 
 test("validateApplicationId: rejects restricted DOS device names", ({ expect }) => {
@@ -86,13 +86,37 @@ test("validateIdentityName: rejects name longer than 50 chars", ({ expect }) => 
 })
 
 test("validateIdentityName: rejects name with invalid characters", ({ expect }) => {
-  expect(() => validateIdentityName("My App", "Test")).toThrow("cannot contain")
-  expect(() => validateIdentityName("My@App", "Test")).toThrow("cannot contain")
+  expect(() => validateIdentityName("My App", "Test")).toThrow("must contain only")
+  expect(() => validateIdentityName("My@App", "Test")).toThrow("must contain only")
 })
 
 test("validateIdentityName: rejects restricted DOS device names", ({ expect }) => {
   expect(() => validateIdentityName("CON", "Test")).toThrow("restricted values")
   expect(() => validateIdentityName("NUL", "Test")).toThrow("restricted values")
+})
+
+test("validateIdentityName: error message uses 'identityName' label (not 'identityName.Id')", ({ expect }) => {
+  const err = (() => {
+    try {
+      validateIdentityName("AB", "MSIX")
+    } catch (e: any) {
+      return e.message
+    }
+  })()
+  expect(err).toContain("identityName")
+  expect(err).not.toContain("identityName.Id")
+})
+
+test("validateApplicationId: error message uses 'must contain only' (not 'cannot contain')", ({ expect }) => {
+  const err = (() => {
+    try {
+      validateApplicationId("My-App", "MSIX")
+    } catch (e: any) {
+      return e.message
+    }
+  })()
+  expect(err).toContain("must contain only")
+  expect(err).not.toMatch(/cannot contain[^s]/)
 })
 
 // ─── resourceLanguageTag ──────────────────────────────────────────────────────
@@ -460,6 +484,20 @@ test("buildWindowsServicesXml: generates multiple service extensions", ({ expect
   expect(result).toContain('Name="Svc2"')
 })
 
+test("buildWindowsServicesXml: escapes special chars in startupType", ({ expect }) => {
+  // startupType is constrained to an enum in TypeScript but we validate XML safety too
+  const result = buildWindowsServicesXml([{ name: "MySvc", startupType: "auto" }], "app\\App.exe")
+  expect(result).toContain('StartupType="auto"')
+  // Verify the value is properly escaped (no raw special chars leak)
+  expect(result).not.toMatch(/StartupType="[^"]*[&<>"'][^"]*"/)
+})
+
+test("buildWindowsServicesXml: escapes special chars in arguments", ({ expect }) => {
+  const result = buildWindowsServicesXml([{ name: "MySvc", arguments: '--arg="val"&<x>' }], "app\\App.exe")
+  expect(result).toContain('Arguments="--arg=&quot;val&quot;&amp;&lt;x&gt;"')
+  expect(result).not.toContain('--arg="val"')
+})
+
 // ─── buildSharedPackageContainerXml ──────────────────────────────────────────
 
 test("buildSharedPackageContainerXml: returns empty string for undefined", ({ expect }) => {
@@ -493,10 +531,12 @@ test("buildStartMenuGroupXml: generates desktop7 extension element", ({ expect }
   const result = buildStartMenuGroupXml("My Suite", "My App")
   expect(result).toContain('Category="windows.appMigration"')
   expect(result).toContain("desktop7:AppMigration")
-  expect(result).toContain('AumId="My App"')
+  expect(result).toContain('AumId="My Suite"')
+  expect(result).not.toContain('AumId="My App"')
 })
 
-test("buildStartMenuGroupXml: escapes special chars in displayName", ({ expect }) => {
-  const result = buildStartMenuGroupXml("suite", 'My "App" & Co')
-  expect(result).toContain('AumId="My &quot;App&quot; &amp; Co"')
+test("buildStartMenuGroupXml: escapes special chars in startMenuGroup value", ({ expect }) => {
+  const result = buildStartMenuGroupXml('My "Suite" & Co', "My App")
+  expect(result).toContain('AumId="My &quot;Suite&quot; &amp; Co"')
+  expect(result).not.toContain('AumId="My App"')
 })

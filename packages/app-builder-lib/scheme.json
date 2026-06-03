@@ -4259,7 +4259,7 @@
           "type": "string"
         },
         "customManifestPath": {
-          "description": "Relative path to a custom AppxManifest.xml template located in the build resources directory.\nSupports the same ${} template macros as the default template, plus MSIX-specific ones:\n${packageIntegrity}, ${windowsServices}, ${sharedPackageContainer}, ${startMenuGroups}",
+          "description": "Relative path to a custom AppxManifest.xml template located in the build resources directory.\nSupports the same `${}` template macros as the default template. MSIX-specific macros include:\n`${packageIntegrity}`, `${sharedPackageContainer}`. Windows services and start-menu group XML\nare both injected via the `${extensions}` macro alongside protocol/file-association extensions.",
           "type": "string"
         },
         "displayName": {
@@ -4441,12 +4441,26 @@
     "MsixWindowsService": {
       "additionalProperties": false,
       "properties": {
+        "arguments": {
+          "description": "Optional command-line arguments passed to the service executable.",
+          "type": "string"
+        },
         "executable": {
           "description": "Relative path to the service executable within the package.\nDefaults to the main app executable.",
           "type": "string"
         },
         "name": {
           "description": "The service name used in the Windows Service Control Manager.",
+          "type": "string"
+        },
+        "startupType": {
+          "default": "manual",
+          "description": "How Windows starts the service. Required by the desktop6 schema.",
+          "enum": [
+            "auto",
+            "manual",
+            "systemGuarded"
+          ],
           "type": "string"
         }
       },
@@ -9020,7 +9034,7 @@
             }
           ],
           "default": "nsis",
-          "description": "The target package type: list of `nsis`, `nsis-web` (Web installer), `portable` ([portable]https://www.electron.build/nsis#portable) app without installation), `appx`, `msix`, `msi`, `msi-wrapped`, `squirrel`, `7z`, `zip`, `tar.xz`, `tar.lz`, `tar.gz`, `tar.bz2`, `dir`.\nAppX and MSIX packages can be built only on Windows 10.\n\nTo use Squirrel.Windows please install `electron-builder-squirrel-windows` dependency."
+          "description": "The target package type: list of `nsis`, `nsis-web` (Web installer), `portable` ([portable]https://www.electron.build/nsis#portable) app without installation), `appx`, `msix`, `msi`, `msi-wrapped`, `squirrel`, `7z`, `zip`, `tar.xz`, `tar.lz`, `tar.gz`, `tar.bz2`, `dir`.\nAppX and MSIX packages can be built on Windows 10 or later and on macOS via Parallels Desktop.\n\nTo use Squirrel.Windows please install `electron-builder-squirrel-windows` dependency."
         },
         "verifyUpdateCodeSignature": {
           "default": true,
