@@ -1,4 +1,5 @@
-import { Arch, asArray, copyOrLinkFile, exec, getPath7za, InvalidConfigurationError, log, walk } from "builder-util"
+import { Arch, asArray, copyOrLinkFile, exec, InvalidConfigurationError, log, walk } from "builder-util"
+import { getPath7za } from "../toolsets/7zip"
 import { deepAssign } from "builder-util-runtime"
 import { emptyDir, mkdirs, readdir, readFile, remove, writeFile } from "fs-extra"
 import * as path from "path"
