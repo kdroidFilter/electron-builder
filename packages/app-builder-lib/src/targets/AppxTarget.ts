@@ -178,7 +178,7 @@ export default class AppXTarget extends Target {
           return appInfo.getVersionInWeirdWindowsForm(options.setBuildNumber === true)
 
         case "applicationId":
-          return resolvePackageApplicationId(options.applicationId, options.identityName, appInfo.name, "Appx")
+          return resolvePackageApplicationId(options.applicationId, options.identityName, appInfo.name, "AppX")
 
         case "identityName":
           return resolvePackageIdentityName(options.identityName, appInfo.name, "AppX")

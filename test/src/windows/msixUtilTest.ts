@@ -35,6 +35,10 @@ test("escapeXmlAttr: escapes angle brackets", ({ expect }) => {
   expect(escapeXmlAttr("<script>")).toBe("&lt;script&gt;")
 })
 
+test("escapeXmlAttr: escapes apostrophes", ({ expect }) => {
+  expect(escapeXmlAttr("O'Brien")).toBe("O&apos;Brien")
+})
+
 test("escapeXmlAttr: escapes combined special characters", ({ expect }) => {
   expect(escapeXmlAttr('<a href="x">test & demo</a>')).toBe("&lt;a href=&quot;x&quot;&gt;test &amp; demo&lt;/a&gt;")
 })

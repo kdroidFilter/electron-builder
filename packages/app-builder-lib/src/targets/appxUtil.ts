@@ -10,9 +10,9 @@ import { CAPABILITIES, isValidCapabilityName } from "./AppxCapabilities"
 
 export const APPX_ASSETS_DIR_NAME = "appx"
 
-/** Escapes a string for safe use as an XML attribute value (double-quoted). Also valid for element text. */
+/** Escapes a string for safe use as an XML attribute value (double- or single-quoted). Also valid for element text. */
 export function escapeXmlAttr(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&apos;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 /**
