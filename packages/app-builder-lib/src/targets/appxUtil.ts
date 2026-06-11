@@ -1,12 +1,13 @@
 import { asArray, InvalidConfigurationError, log } from "builder-util"
-import type { MsixWindowsService, MsixSharedPackageContainer } from "../options/MsixOptions"
+import type { MsixWindowsService, MsixSharedPackageContainer } from "../options/MsixOptions.js"
 import { Nullish } from "builder-util-runtime"
-import { readdir, readFile } from "fs-extra"
+import _fsExtra from "fs-extra"
+const { readdir, readFile } = _fsExtra
 import * as path from "path"
-import { FileAssociation } from "../options/FileAssociation"
-import { Protocol } from "../options/PlatformSpecificBuildOptions"
-import { VmManager } from "../vm/vm"
-import { CAPABILITIES, isValidCapabilityName } from "./AppxCapabilities"
+import { FileAssociation } from "../options/FileAssociation.js"
+import { Protocol } from "../options/PlatformSpecificBuildOptions.js"
+import { VmManager } from "../vm/vm.js"
+import { CAPABILITIES, isValidCapabilityName } from "./win/AppxCapabilities.js"
 
 export const APPX_ASSETS_DIR_NAME = "appx"
 

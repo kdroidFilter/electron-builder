@@ -101,7 +101,7 @@ export default class AppXTarget extends Target {
     )
 
     const userAssetDir = await this.packager.getResource(undefined, APPX_ASSETS_DIR_NAME)
-    const assetInfo = await computeUserAssets(vm, vendorPath.appxAssets, userAssetDir)
+    const assetInfo = await AppXTarget.computeUserAssets(vm, vendorPath.appxAssets, userAssetDir)
     const userAssets = assetInfo.userAssets
 
     const manifestFile = stageDir.getTempFile("AppxManifest.xml")
@@ -166,6 +166,32 @@ export default class AppXTarget extends Target {
     })
   }
 
+  private static async computeUserAssets(vm: VmManager, vendorPath: string, userAssetDir: string | null) {
+    const mappings: Array<string> = []
+    let userAssets: Array<string>
+    const allAssets: Array<string> = []
+    if (userAssetDir == null) {
+      userAssets = []
+    } else {
+      userAssets = (await readdir(userAssetDir)).filter(it => !it.startsWith(".") && !it.endsWith(".db") && it.includes("."))
+      for (const name of userAssets) {
+        mappings.push(`"${vm.toVmFile(userAssetDir)}${vm.pathSep}${name}" "assets\\${name}"`)
+        allAssets.push(path.join(userAssetDir, name))
+      }
+    }
+
+    for (const defaultAsset of Object.keys(vendorAssetsForDefaultAssets)) {
+      if (userAssets.length === 0 || !isDefaultAssetIncluded(userAssets, defaultAsset)) {
+        const file = path.join(vendorPath, "appxAssets", vendorAssetsForDefaultAssets[defaultAsset])
+        mappings.push(`"${vm.toVmFile(file)}" "assets\\${defaultAsset}"`)
+        allAssets.push(file)
+      }
+    }
+
+    // we do not use process.arch to build path to tools, because even if you are on x64, ia32 appx tool must be used if you build appx for ia32
+    return { userAssets, mappings, allAssets }
+  }
+
   // https://github.com/electron-userland/electron-builder/issues/2108#issuecomment-333200711
   private async computePublisherName() {
     const signtoolManager = await this.packager.signingManager.value
@@ -186,7 +212,7 @@ export default class AppXTarget extends Target {
       log.info({ manifestPath: log.filePath(customManifestPath) }, "custom appx manifest found")
     }
     const manifestFileContent = await readFile(customManifestPath || path.join(getTemplatePath("appx"), "appxmanifest.xml"), "utf8")
-    const manifest = substituteManifestMacros(manifestFileContent, (p1): string => {
+    const manifest = manifestFileContent.replace(/\${([a-zA-Z0-9]+)}/g, (match, p1): string => {
       switch (p1) {
         case "publisher":
           return publisher
@@ -202,11 +228,60 @@ export default class AppXTarget extends Target {
         case "version":
           return appInfo.getVersionInWeirdWindowsForm(options.setBuildNumber === true)
 
-        case "applicationId":
-          return resolvePackageApplicationId(options.applicationId, options.identityName, appInfo.name, "AppX")
+        case "applicationId": {
+          const validCharactersRegex = /^([A-Za-z][A-Za-z0-9]*)(\.[A-Za-z][A-Za-z0-9]*)*$/
+          const identitynumber = parseInt(options.identityName as string, 10) || NaN
+          let result: string
+          if (options.applicationId) {
+            result = options.applicationId
+          } else if (!isNaN(identitynumber) && options.identityName !== null && options.identityName !== undefined) {
+            if (options.identityName[0] === "0") {
+              log.warn(`Remove the 0${identitynumber}`)
+              result = options.identityName.replace("0" + identitynumber.toString(), "")
+            } else {
+              log.warn(`Remove the ${identitynumber}`)
+              result = options.identityName.replace(identitynumber.toString(), "")
+            }
+          } else {
+            result = options.identityName || appInfo.name
+          }
 
-        case "identityName":
-          return resolvePackageIdentityName(options.identityName, appInfo.name, "AppX")
+          if (result.length < 1 || result.length > 64) {
+            const message = `Appx Application.Id must be between 1 and 64 characters in length: ${result}`
+            throw new InvalidConfigurationError(message)
+          } else if (!validCharactersRegex.test(result)) {
+            const message = `AppX Application.Id cannot contain alpha-numeric, period, and dash characters: ${result}"`
+            throw new InvalidConfigurationError(message)
+          } else if (restrictedApplicationIdValues.includes(result.toUpperCase())) {
+            const message = `AppX Application.Id cannot contain restricted values ${JSON.stringify(restrictedApplicationIdValues)}: ${result}`
+            throw new InvalidConfigurationError(message)
+          } else if (result == null && options.applicationId == null) {
+            const message = `Please set appx.applicationId (or correct appx.identityName or name)`
+            throw new InvalidConfigurationError(message)
+          }
+
+          return result
+        }
+
+        case "identityName": {
+          const result = options.identityName || appInfo.name
+          const validCharactersRegex = /^[a-zA-Z0-9.-]+$/
+          if (result.length < 3 || result.length > 50) {
+            const message = `Appx identityName.Id must be between 3 and 50 characters in length: ${result}`
+            throw new InvalidConfigurationError(message)
+          } else if (!validCharactersRegex.test(result)) {
+            const message = `AppX identityName.Id cannot contain of alpha-numeric, period, and dash characters: ${result}`
+            throw new InvalidConfigurationError(message)
+          } else if (restrictedApplicationIdValues.includes(result.toUpperCase())) {
+            const message = `AppX identityName.Id cannot contain restricted values ${JSON.stringify(restrictedApplicationIdValues)}: ${result}`
+            throw new InvalidConfigurationError(message)
+          } else if (result == null && options.identityName == null) {
+            const message = `Please set appx.identityName or name`
+            throw new InvalidConfigurationError(message)
+          }
+
+          return result
+        }
 
         case "executable":
           return executable
@@ -264,8 +339,22 @@ export default class AppXTarget extends Target {
   }
 
   private getCapabilities(): string {
-    const inner = buildCapabilitiesXml(this.options.capabilities)
-    return `<Capabilities>\n${inner}\n</Capabilities>`
+    const caps = asArray(this.options.capabilities)
+
+    const capSet = new Set(caps)
+
+    const invalid = Array.from(capSet).filter(cap => !isValidCapabilityName(cap))
+    if (invalid.length > 0) {
+      throw new Error(`invalid windows capabilit${invalid.length === 1 ? "y" : "ies"} specified: ${invalid.join(", ")}`)
+    }
+
+    // Ensure runFullTrust is always included
+    capSet.add("runFullTrust")
+
+    // Filter and map in one pass
+    const capabilityStrings = CAPABILITIES.filter(cap => capSet.has(cap.name)).map(cap => `  ${cap.toXMLString()}`)
+
+    return `<Capabilities>\n${capabilityStrings.join("\n")}\n</Capabilities>`
   }
 
   private async getExtensions(executable: string, displayName: string): Promise<string> {
@@ -324,4 +413,60 @@ export default class AppXTarget extends Target {
     extensions += "</Extensions>"
     return extensions
   }
+}
+
+// get the resource - language tag, see https://docs.microsoft.com/en-us/windows/uwp/globalizing/manage-language-and-region#specify-the-supported-languages-in-the-apps-manifest
+function resourceLanguageTag(userLanguages: Array<string> | Nullish): string {
+  if (userLanguages == null || userLanguages.length === 0) {
+    userLanguages = [DEFAULT_RESOURCE_LANG]
+  }
+  return userLanguages.map(it => `<Resource Language="${it.trim().replace(/_/g, "-")}" />`).join("\n")
+}
+
+function lockScreenTag(userAssets: Array<string>): string {
+  if (isDefaultAssetIncluded(userAssets, "BadgeLogo.png")) {
+    return '<uap:LockScreen Notification="badgeAndTileText" BadgeLogo="assets\\BadgeLogo.png" />'
+  } else {
+    return ""
+  }
+}
+
+function defaultTileTag(userAssets: Array<string>, showNameOnTiles: boolean): string {
+  const defaultTiles: Array<string> = ["<uap:DefaultTile", 'Wide310x150Logo="assets\\Wide310x150Logo.png"']
+
+  if (isDefaultAssetIncluded(userAssets, "LargeTile.png")) {
+    defaultTiles.push('Square310x310Logo="assets\\LargeTile.png"')
+  }
+  if (isDefaultAssetIncluded(userAssets, "SmallTile.png")) {
+    defaultTiles.push('Square71x71Logo="assets\\SmallTile.png"')
+  }
+
+  if (showNameOnTiles) {
+    defaultTiles.push(">")
+    defaultTiles.push("<uap:ShowNameOnTiles>")
+    defaultTiles.push("<uap:ShowOn", 'Tile="wide310x150Logo"', "/>")
+    defaultTiles.push("<uap:ShowOn", 'Tile="square150x150Logo"', "/>")
+    defaultTiles.push("</uap:ShowNameOnTiles>")
+    defaultTiles.push("</uap:DefaultTile>")
+  } else {
+    defaultTiles.push("/>")
+  }
+  return defaultTiles.join(" ")
+}
+
+function splashScreenTag(userAssets: Array<string>): string {
+  if (isDefaultAssetIncluded(userAssets, "SplashScreen.png")) {
+    return '<uap:SplashScreen Image="assets\\SplashScreen.png" />'
+  } else {
+    return ""
+  }
+}
+
+function isDefaultAssetIncluded(userAssets: Array<string>, defaultAsset: string) {
+  const defaultAssetName = defaultAsset.substring(0, defaultAsset.indexOf("."))
+  return userAssets.some(it => it.includes(defaultAssetName))
+}
+
+function isScaledAssetsProvided(userAssets: Array<string>) {
+  return userAssets.some(it => it.includes(".scale-") || it.includes(".targetsize-"))
 }

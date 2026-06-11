@@ -1,16 +1,16 @@
 import { Arch, asArray, copyOrLinkFile, exec, InvalidConfigurationError, log, walk } from "builder-util"
-import { getPath7za } from "../toolsets/7zip"
+import { getPath7za } from "../toolsets/7zip.js"
 import { deepAssign } from "builder-util-runtime"
-import { emptyDir, mkdirs, readdir, readFile, remove, writeFile } from "fs-extra"
+import _fsExtra from "fs-extra"
+const { emptyDir, mkdirs, readdir, readFile, remove, writeFile } = _fsExtra
 import * as path from "path"
-import { MsixOptions } from "../options/MsixOptions"
-import { getWindowsKitsBundle } from "../toolsets/windows"
-import { Target } from "../core"
-import { getTemplatePath } from "../util/pathManager"
-import type { VmManager } from "../vm/vm"
-import { WinPackager } from "../winPackager"
-import { createStageDir } from "./targetUtil"
-import { isOldWin6 } from "../toolsets/windows"
+import { MsixOptions } from "../options/MsixOptions.js"
+import { getWindowsKitsBundle, isOldWin6 } from "../toolsets/winCodeSign.js"
+import { Target } from "../core.js"
+import { getTemplatePath } from "../util/pathManager.js"
+import type { VmManager } from "../vm/vm.js"
+import { WinPackager } from "../winPackager.js"
+import { createStageDir } from "./targetUtil.js"
 import {
   APPX_ASSETS_DIR_NAME,
   buildCapabilitiesXml,
@@ -27,10 +27,10 @@ import {
   resourceLanguageTag,
   splashScreenTag,
   substituteManifestMacros,
-} from "./appxUtil"
+} from "./appxUtil.js"
 
 export default class MsixTarget extends Target {
-  readonly options: MsixOptions = deepAssign({}, this.packager.platformSpecificBuildOptions, this.packager.config.msix)
+  readonly options: MsixOptions = deepAssign({}, this.packager.platformOptions, this.packager.config.msix)
 
   isAsyncSupported = false
 
@@ -61,7 +61,7 @@ export default class MsixTarget extends Target {
 
     const artifactName = packager.expandArtifactBeautyNamePattern(this.options, "msix", arch)
     const artifactPath = path.join(this.outDir, artifactName)
-    await packager.info.emitArtifactBuildStarted({
+    await packager.emitArtifactBuildStarted({
       targetPresentableName: "MSIX",
       file: artifactPath,
       arch,
@@ -104,7 +104,7 @@ export default class MsixTarget extends Target {
     const manifestFile = stageDir.getTempFile("AppxManifest.xml")
     await this.writeManifest(manifestFile, arch, await this.computePublisherName(), userAssets)
 
-    await packager.info.emitAppxManifestCreated(manifestFile)
+    await packager.emitAppxManifestCreated(manifestFile)
     mappingList.push(assetInfo.mappings)
     mappingList.push([`"${vm.toVmFile(manifestFile)}" "AppxManifest.xml"`])
 
@@ -153,7 +153,7 @@ export default class MsixTarget extends Target {
       } finally {
         await stageDir.cleanup()
       }
-      await packager.info.emitArtifactBuildCompleted({
+      await packager.emitArtifactBuildCompleted({
         file: artifactPath,
         packager,
         arch,
@@ -190,7 +190,7 @@ export default class MsixTarget extends Target {
     const bundleName = packager.expandArtifactBeautyNamePattern(this.options, "msixbundle", Arch.x64)
     const bundlePath = path.join(this.outDir, bundleName)
 
-    await packager.info.emitArtifactBuildStarted({
+    await packager.emitArtifactBuildStarted({
       targetPresentableName: "MSIX Bundle",
       file: bundlePath,
       arch: null,
@@ -207,7 +207,7 @@ export default class MsixTarget extends Target {
 
     await packager.signIf(bundlePath)
 
-    await packager.info.emitArtifactBuildCompleted({
+    await packager.emitArtifactBuildCompleted({
       file: bundlePath,
       packager,
       arch: null,
@@ -224,7 +224,7 @@ export default class MsixTarget extends Target {
     const uploadName = packager.expandArtifactBeautyNamePattern(this.options, "msixupload", Arch.x64)
     const uploadPath = path.join(this.outDir, uploadName)
 
-    await packager.info.emitArtifactBuildStarted({
+    await packager.emitArtifactBuildStarted({
       targetPresentableName: "MSIX Upload",
       file: uploadPath,
       arch: null,
@@ -233,7 +233,7 @@ export default class MsixTarget extends Target {
     const sevenZa = await getPath7za()
     await exec(sevenZa, ["a", "-tzip", uploadPath, sourcePath])
 
-    await packager.info.emitArtifactBuildCompleted({
+    await packager.emitArtifactBuildCompleted({
       file: uploadPath,
       packager,
       arch: null,
@@ -356,14 +356,14 @@ export default class MsixTarget extends Target {
     const options = this.options
 
     const baseExtensions = await buildExtensionsXml({
-      protocols: asArray(packager.config.protocols).concat(asArray(packager.platformSpecificBuildOptions.protocols)),
-      fileAssociations: asArray(packager.config.fileAssociations).concat(asArray(packager.platformSpecificBuildOptions.fileAssociations)),
+      protocols: asArray(packager.config.protocols).concat(asArray(packager.platformOptions.protocols)),
+      fileAssociations: asArray(packager.config.fileAssociations).concat(asArray(packager.platformOptions.fileAssociations)),
       addAutoLaunchExtension: options.addAutoLaunchExtension,
       customExtensionsPath: options.customExtensionsPath,
-      appDir: packager.info.appDir,
+      appDir: packager.appDir,
       executable,
       displayName,
-      dependencyNames: packager.info.metadata.dependencies,
+      dependencyNames: packager.metadata.dependencies,
     })
 
     const servicesXml = buildWindowsServicesXml(options.windowsServices, executable)
