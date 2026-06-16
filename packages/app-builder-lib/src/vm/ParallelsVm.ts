@@ -1,5 +1,6 @@
-import { DebugLogger, ExtraSpawnOptions, exec, log, spawn } from "builder-util"
+import { DebugLogger, ExtraSpawnOptions, exec, log, sanitizeDirPath, spawn } from "builder-util"
 import { ExecFileOptions, SpawnOptions, execFileSync } from "child_process"
+import { homedir } from "os"
 import { VmManager } from "./vm.js"
 
 /** @internal */
@@ -121,14 +122,24 @@ export function macPathToParallelsWindows(file: string) {
   if (file.startsWith("C:\\")) {
     return file
   }
+  if (!file.startsWith("/")) {
+    throw new Error(`Invalid path for Parallels VM execution: "${file}"`)
+  }
+  // file is an absolute macOS host path; sanitizeDirPath rejects null/newline (arg-injection) and leaves it otherwise unchanged
+  const sanitized = sanitizeDirPath(file)
   // \\Mac\Home maps to the current user's home directory and is always accessible
   // in both --current-user and SYSTEM exec contexts (unlike \\Mac\Host which requires
   // "All Disks" sharing to be enabled in Parallels preferences).
-  const home = require("os").homedir() as string
-  if (file.startsWith(home + "/")) {
-    return "\\\\Mac\\Home\\" + file.substring(home.length + 1).replace(/\//g, "\\")
+  const home = homedir()
+  const uncPath = sanitized.startsWith(home + "/")
+    ? "\\\\Mac\\Home\\" + sanitized.substring(home.length + 1).replace(/\//g, "\\")
+    : "\\\\Mac\\Host\\" + sanitized.replace(/\//g, "\\")
+  // Reject characters/control bytes that can change command/tool argument semantics.
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1F\x7F"*?<>|]/.test(uncPath)) {
+    throw new Error(`Invalid path for Parallels VM execution: "${file}"`)
   }
-  return "\\\\Mac\\Host\\" + file.replace(/\//g, "\\")
+  return uncPath
 }
 
 export interface ParallelsVm {

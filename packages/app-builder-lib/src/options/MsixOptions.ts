@@ -1,4 +1,4 @@
-import { TargetSpecificOptions } from "../core"
+import { TargetSpecificOptions } from "../core.js"
 
 export interface MsixWindowsService {
   /** The service name used in the Windows Service Control Manager. */

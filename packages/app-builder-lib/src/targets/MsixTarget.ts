@@ -245,7 +245,7 @@ export default class MsixTarget extends Target {
 
   private async computePublisherName() {
     const signtoolManager = await this.packager.signingManager.value
-    return signtoolManager.computePublisherName(this, this.options.publisher)
+    return signtoolManager.computePublisherName(this, this.options.publisher ?? null)
   }
 
   private async writeManifest(outFile: string, arch: Arch, publisher: string, userAssets: Array<string>) {
