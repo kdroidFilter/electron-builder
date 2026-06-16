@@ -1,3 +1,12 @@
+# [27.0.0-alpha.4](https://github.com/electron-userland/electron-builder/compare/electron-builder@27.0.0-alpha.3...electron-builder@27.0.0-alpha.4) (2026-06-16)
+
+
+### Bug Fixes
+
+* **win:** serialize concurrent signtool invocations with lockfile ([#9920](https://github.com/electron-userland/electron-builder/issues/9920)) ([449e8d4](https://github.com/electron-userland/electron-builder/commit/449e8d4da781af2550684809bbac3f4acafcc92e))
+
+
+
 # [27.0.0-alpha.3](https://github.com/electron-userland/electron-builder/compare/electron-builder@27.0.0-alpha.2...electron-builder@27.0.0-alpha.3) (2026-06-16)
 
 

@@ -1,5 +1,23 @@
 # app-builder-lib
 
+## 27.0.0-alpha.4
+
+### Patch Changes
+
+- Chore: migrate usages of mkdtemp to utilize TmpDir to unify temp directory usage _[`#9907`](https://github.com/electron-userland/electron-builder/pull/9907) [`a82943a`](https://github.com/electron-userland/electron-builder/commit/a82943ace5737252c7f62d2c6b5f7c679d753a60) [@mmaietta](https://github.com/mmaietta)_
+- Fix(win): serialize concurrent signtool invocations to avoid intermittent "An error occurred while attempting to load the signing certificate" _[`#9920`](https://github.com/electron-userland/electron-builder/pull/9920) [`449e8d4`](https://github.com/electron-userland/electron-builder/commit/449e8d4da781af2550684809bbac3f4acafcc92e) [@mmaietta](https://github.com/mmaietta)_
+
+<details><summary>Updated 2 dependencies</summary>
+
+<small>
+
+</small>
+
+- `dmg-builder@27.0.0-alpha.4`
+- `electron-builder-squirrel-windows@27.0.0-alpha.4`
+
+</details>
+
 ## 27.0.0-alpha.3
 
 ### Major Changes
